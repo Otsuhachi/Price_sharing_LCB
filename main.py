@@ -2,20 +2,12 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-import subprocess
 import os
 
 app = Flask(__name__)
-command = ['heroku', 'config:get', 'YOUR_CHANNEL_ACCESS_TOKEN', '-a', 'pslcb']
-shell_options = {
-    'args': command,
-    'check': True,
-    'shell': True,
-    'stdout': subprocess.PIPE
-}
-YOUR_CHANNEL_ACCESS_TOKEN = subprocess.run(**shell_options).stdout.decode()
-command[2] = 'YOUR_CHANNEL_SECRET'
-YOUR_CHANNEL_SECRET = subprocess.run(**shell_options).stdout.decode()
+
+YOUR_CHANNEL_ACCESS_TOKEN = os.environ['YOUR_CHANNEL_ACCESS_TOKEN']
+YOUR_CHANNEL_SECRET = os.environ['YOUR_CHANNEL_SECRET']
 
 line_bot_api = LineBotApi(YOUR_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(YOUR_CHANNEL_SECRET)
