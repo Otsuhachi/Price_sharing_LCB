@@ -1,14 +1,16 @@
-from flask import Flask, request, abort
+import os
+
+from flask import Flask, abort, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-import os
 
+from talker.talker import Talker
+
+ai = Talker('Prototype')
 app = Flask(__name__)
-
 YOUR_CHANNEL_ACCESS_TOKEN = os.environ['YOUR_CHANNEL_ACCESS_TOKEN']
 YOUR_CHANNEL_SECRET = os.environ['YOUR_CHANNEL_SECRET']
-
 line_bot_api = LineBotApi(YOUR_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(YOUR_CHANNEL_SECRET)
 
@@ -29,8 +31,8 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    line_bot_api.reply_message(event.reply_token,
-                               TextSendMessage(text=event.message.text))
+    text = ai.dialogue(event.message.text)
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
 
 
 if __name__ == '__main__':
