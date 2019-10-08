@@ -1,114 +1,236 @@
 from talker.dictionary import Dictionary
-import re
 
 
 class Responder:
-    def __init__(self):
-        self.__dictionary = Dictionary()
-        self.__action_mode = None
-        self.__action_value = None
-        self.__confirm_phase = False
+    """AIの応答を制御する思考エンジンの基底クラスです。
 
-    def set_mode(self, text):
-        for action in self.__dictionary.actions:
-            matcher = re.search(action['pattern'], text)
-            if matcher:
-                self.mode = action['mode']
-                return
-        self.mode = None
+    Attributes:
+        state (int or str): 実行状態を表します。
+            0が初期化直後で、処理を完了し不要になった状態を"end"としてください。
+    """
+    def __init__(self):
+        """初期化します。
+        """
+        self.__state = 0
 
     def response(self, text):
-        if self.__confirm_phase:
-            return self.confirm(text)
-        if self.mode is None:
-            self.set_mode(text)
-        if 'add' in self.mode:
-            return self.add_response(text)
+        """AIの応答を生成し、返します。
+        子クラスにて独自定義してください。
 
-    def add_response(self, text):
-        responses = {
-            'add1': '商品名',
-            'add2': '分量(数値)',
-            'add3': '価格(数値)',
-            'add4': '店',
-            'add5': '支店名'
-        }
-        prompt = "を入力してください。> "
-        if not text:
-            pass
-        elif self.mode == 'add':
-            self.__action_value = ['add']
-            self.mode = 'add1'
-        elif '1' in self.mode:
-            self.__action_value.append(text)
-            self.mode = 'add2'
-        elif '2' in self.mode:
-            if Responder.is_value(text):
-                value = Responder.int_or_float(text)
-                self.__action_value.append(value)
-                self.mode = 'add3'
-        elif '3' in self.mode:
-            if Responder.is_int(text):
-                value = int(text)
-                self.__action_value.append(value)
-                self.mode = 'add4'
-        elif '4' in self.mode:
-            self.__action_value.append(text)
-            self.mode = 'add5'
-        elif '5' in self.mode:
-            if text[-1] == '店':
-                text = text[:-1]
-            self.__action_value.append(text)
-            res = '商品: {}\n分量: {}\n価格: {}円\n店: {} {}店\n登録してよろしいですか？'.format(
-                *self.__action_value[1:])
-            self.__confirm_phase = True
-            return res
-
-        return f'{responses[self.mode]}{prompt}'
-
-    def confirm(self, text):
-        if not text or text.lower() not in ('はい', 'いいえ', 'yes', 'no'):
-            return '[はい, いいえ, yes, no]のいずれかでお答えください。'
-        else:
-            self.__confirm_phase = False
-            if text.lower() in ('はい', 'yes'):
-                self.add()
-                self.__action_value = None
-                return '登録しました。'
-            self.mode = None
-            return '登録しませんでした。'
-
-    def add(self):
-        # DatabaseとModeに合わせた処理を行う。
-        pass
+        Args:
+            text (str): ユーザーからの入力。
+        """
+        raise NotImplementedError
 
     @property
-    def mode(self):
-        return self.__action_mode
+    def state(self):
+        """現在の実行状態です。
+        0, 'end' 以外の状態は独自に設定可能です。
 
-    @mode.setter
-    def mode(self, value):
-        self.__action_mode = value
+        Returns:
+            int or str: 現在の実行状態。
+        """
+        return self.__state
+
+    def exit(self):
+        """現在の実行状態を'end'に設定します。
+        """
+        self.__state = 'end'
+
+    @state.setter
+    def state(self, value):
+        """現在の実行状態を設定します。
+        0, 'end'を指定することはできません。
+
+        Args:
+            value (int or str): 現在の実行状態。
+        """
+        if value in (0, 'end'):
+            raise ValueError
+        self.__state = value
 
     @staticmethod
-    def is_value(text):
+    def text2value(text, mode='both'):
+        """文字列を数値変換し、返します。
+
+        modeで変換結果が変わります。
+        modeに指定できる引数は[float, int, 'both']のいずれかで、それ以外を与えた場合は'both'になります。
+
+        Examples:
+            Case1:
+                >>> from talker.responder import Responder as R
+                >>> a='2'
+                >>> R.text2value(a)
+                2
+                >>> R.text2value(a, int)
+                2
+                >>> R.text2value(a, float)
+                2.0
+                >>> str(R.text2value('a'))
+                'None'
+
+            Case2:
+                >>> from talker.responder import Responder as R
+                >>> a='2.3'
+                >>> R.text2value(a)
+                2.3
+                >>> R.text2value(a, int)
+                2
+                >>> R.text2value(a, float)
+                2.3
+
+        Args:
+            text (str): 数値に変換したい文字列。
+            mode (str or int or float, optional): 変換モード。詳しくはExamplesを参照してください。
+
+        Returns:
+            int or float or None: 数値型。変換できなければNoneが返ります。
+        """
+        if mode not in (int, float, 'both'):
+            mode = 'both'
         try:
-            float(text)
-            return True
+            f = float(text)
+            if mode == float:
+                return f
         except ValueError:
-            return False
-
-    @staticmethod
-    def is_int(text):
+            return None
         try:
-            int(text)
-            return True
+            i = int(f)
         except ValueError:
-            return False
+            if mode == 'both':
+                return f
+            return None
+        if mode == 'both':
+            if f == i:
+                return i
+            return f
+        elif mode == int:
+            return i
 
-    @staticmethod
-    def int_or_float(value):
-        value = float(value)
-        if value != int(value):
-            return value
-        return int(value)
+
+class AddResponder(Responder):
+    """商品情報を追加するためのAIの思考エンジンクラスです。
+
+    Attributes:
+        keys (tuple[str]): stateに設定するキー群です。 これを使って商品登録の進捗を制御します。
+        infomation: 商品情報です。
+    """
+    def __init__(self):
+        """商品情報を追加します。
+        """
+        super().__init__()
+        self.__load()
+        self.__infomation = {x: False for x in self.keys}
+
+    def __load(self):
+        dics = Dictionary().add_responses
+        self.__keys = []
+        self.__responses = {}
+        for dic in dics:
+            for key in dic:
+                self.__keys.append(key)
+                self.__responses[key] = dic[key]
+
+    def response(self, text):
+        """AIの応答を生成し、返します。
+        受け取った文字列に応じて、商品情報登録の進捗制御、返信メッセージの作成を行います。
+
+        Args:
+            text (str): ユーザーからの入力。
+
+        Returns:
+            str: AIからの応答。
+        """
+        res = self.add_infomation(text)
+        return res
+
+    def add_infomation(self, text):
+        previous = self.state
+        self.set_state()
+        if previous == 0:
+            return self.responses[self.state]
+        self.set_infomation_value(text)
+        if self.info['confirm'] in ('ok', 'no'):
+            self.exit()
+            if self.info['confirm'] == 'ok':
+                self.push_database()
+                return "登録しました。"
+            return "登録を取り消しました。"
+        if self.state == 'confirm':
+            return self.responses[self.state].format(*self.values)
+        return self.responses[self.state]
+
+    def set_infomation_value(self, text):
+        state = self.state
+        if state == 'name':
+            if text:
+                self.info['name'] = text
+        elif state == 'amount':
+            value = self.text2value(text)
+            if value is not None:
+                self.info['amount'] = value
+        elif state == 'price':
+            value = self.text2value(text, int)
+            if value is not None:
+                self.info['price'] = value
+        elif state == 'shop':
+            if text:
+                self.info['shop'] = text
+        elif state == 'shop_branch':
+            if text:
+                if text[-1] != '店':
+                    text += '店'
+                self.info['shop_branch'] = text
+        elif state == 'confirm':
+            ok_word = ('yes', 'y', 'はい')
+            no_word = ('no', 'n', 'いいえ')
+            if text:
+                text = text.lower()
+                if text in ok_word:
+                    self.info['confirm'] = 'ok'
+                elif text in no_word:
+                    self.info['confirm'] = 'no'
+        self.set_state()
+
+    def push_database(self):
+        pass
+
+    def set_state(self):
+        if self.state == 0:
+            self.state = 'name'
+            return
+        for key in self.keys:
+            data = self.info[key]
+            if not data and data is not None:
+                self.state = key
+                return
+
+    def show(self):
+        """現在の商品情報を表示します。
+        """
+        print("商品情報")
+        for key in self.info:
+            print(f"{key}: {self.info[key]}")
+
+    @property
+    def values(self):
+        i = self.info
+        return (i['name'], i['amount'], i['price'], i['shop'],
+                i['shop_branch'])
+
+    @property
+    def keys(self):
+        return self.__keys
+
+    @property
+    def info(self):
+        return self.__infomation
+
+    @property
+    def responses(self):
+        return self.__responses
+
+
+class ProductsResponder(Responder):
+    def __init__(self):
+        super().__init__()

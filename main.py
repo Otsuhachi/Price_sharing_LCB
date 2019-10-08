@@ -20,7 +20,7 @@ def callback():
     signature = request.headers['X-Line-Signature']
 
     body = request.get_data(as_text=True)
-    app.logger.info(f"Request body: {body}")
+    # app.logger.info(f"Request body: {body}")
 
     try:
         handler.handle(body, signature)
@@ -31,8 +31,12 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    text = ai.dialogue(event.message.text)
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=text))
+    text = event.message.text
+    user_id = event.source.user_id
+    res = ai.dialogue(user_id, text)
+    if res is None:
+        return
+    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=res))
 
 
 if __name__ == '__main__':

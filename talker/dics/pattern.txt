@@ -1,3 +1,9 @@
 action	^(登録|追加|とうろく|ついか|add)	add
-action	^(キャンセル|cancel|取り消し|とりけし)	cancel
-action	^(削除|さくじょ|取り?消し?|del(ete)|rem(ove))	del
+action	^(キャンセル|cancel|取り?消し?|とりけし)	cancel
+action	^(削除|さくじょ|消去|しょうきょ|けす|消す|del(ete)?|rem(ove)?)	del
+add_responses	name	商品名を入力してください。
+add_responses	amount	分量(数値)を入力してください。\n単位は入力しないでください。
+add_responses	price	価格(整数値)を入力してください。\n単位は入力しないでください。
+add_responses	shop	店を入力してください。
+add_responses	shop_branch	支店名を入力してください。
+add_responses	confirm	商品名: {}\n分量: {}\n価格: {}\n店: {}\n支店: {}\n登録しますか？\n\n[YES]: yes, y, はい\n[NO]: no, n, いいえ
