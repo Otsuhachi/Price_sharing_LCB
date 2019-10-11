@@ -1,4 +1,6 @@
 from pathlib import Path
+import pickle
+import base64
 
 
 class Dictionary:
@@ -21,7 +23,9 @@ class Dictionary:
             >>> dic.actions
             [{'pattern': '^(登録|追加|とうろく|ついか|add)', 'status': 'add'}]
         """
-        self.__file = Path('talker', 'dics', 'pattern.txt')
+        self.__path = Path('talker', 'dics')
+        self.__pattern_file = self.__path / 'pattern.txt'
+        self.__db_file = self.__path / 'db.txt'
         self.__actions = []
         self.__add_responses = []
         self.__todo = []
@@ -30,7 +34,7 @@ class Dictionary:
     def __load(self):
         """このメソッドは自動実行専用です。
         """
-        with open(self.__file, 'r', encoding='utf-8') as f:
+        with open(self.__pattern_file, 'r', encoding='utf-8') as f:
             for line in f:
                 if not line:
                     continue
@@ -45,6 +49,8 @@ class Dictionary:
                 elif type_ == 'add_responses':
                     status = str(status).replace('\\n', '\n')
                     self.__add_responses.append({pattern: status})
+        with open(self.__db_file, 'r', encoding='utf-8') as f:
+            self.__uri = pickle.loads(base64.b64decode(f.read()))
 
     @property
     def actions(self):
@@ -67,6 +73,10 @@ class Dictionary:
             list[dict]: AIの応答パターンに追加するかもしれない反応の定義群。
         """
         return self.__todo
+
+    @property
+    def uri(self):
+        return self.__uri
 
 
 if __name__ == '__main__':

@@ -6,13 +6,11 @@ verify_ssl = true
 [dev-packages]
 yapf = "*"
 flake8 = "*"
-pycodestyle = "*"
-pyinstaller = "*"
-sphinx = "*"
 
 [packages]
 flask = "*"
 line-bot-sdk = "*"
+psycopg2 = "*"
 
 [requires]
 python_version = "3.7"

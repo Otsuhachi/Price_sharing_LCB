@@ -1,4 +1,5 @@
 from talker.dictionary import Dictionary
+import psycopg2
 
 
 class Responder:
@@ -12,6 +13,12 @@ class Responder:
         """初期化します。
         """
         self.__state = 0
+        self.__create_cursor()
+
+    def __create_cursor(self):
+        self.__connection = psycopg2.connect(Dictionary().uri)
+        self.__connection.autocommit = True
+        self.__cursor = self.__connection.cursor()
 
     def response(self, text):
         """AIの応答を生成し、返します。
@@ -36,6 +43,8 @@ class Responder:
         """現在の実行状態を'end'に設定します。
         """
         self.__state = 'end'
+        self.cursor.close()
+        self.__connection.close()
 
     @state.setter
     def state(self, value):
@@ -107,6 +116,10 @@ class Responder:
         elif mode == int:
             return i
 
+    @property
+    def cursor(self):
+        return self.__cursor
+
 
 class AddResponder(Responder):
     """商品情報を追加するためのAIの思考エンジンクラスです。
@@ -115,12 +128,15 @@ class AddResponder(Responder):
         keys (tuple[str]): stateに設定するキー群です。 これを使って商品登録の進捗を制御します。
         infomation: 商品情報です。
     """
-    def __init__(self):
+    def __init__(self, **kwargs):
         """商品情報を追加します。
         """
         super().__init__()
         self.__load()
         self.__infomation = {x: False for x in self.keys}
+        for key in kwargs:
+            if key in self.keys:
+                self.__infomation[key] = kwargs[key]
 
     def __load(self):
         dics = Dictionary().add_responses
@@ -151,11 +167,13 @@ class AddResponder(Responder):
             return self.responses[self.state]
         self.set_infomation_value(text)
         if self.info['confirm'] in ('ok', 'no'):
-            self.exit()
             if self.info['confirm'] == 'ok':
                 self.push_database()
-                return "登録しました。"
-            return "登録を取り消しました。"
+                res = "登録しました。"
+            else:
+                res = "登録を取り消しました。"
+            self.exit()
+            return res
         if self.state == 'confirm':
             return self.responses[self.state].format(*self.values)
         return self.responses[self.state]
@@ -193,7 +211,16 @@ class AddResponder(Responder):
         self.set_state()
 
     def push_database(self):
-        pass
+        del_data = (self.info['name'], self.info['amount'], self.info['shop'],
+                    self.info['shop_branch'])
+        data = tuple(self.info[key] for key in self.keys if key != 'confirm')
+
+        sqls = [
+            "delete from products where name='{}' and amount={} and shop='{}' and shop_branch='{}'"
+            .format(*del_data), f"insert into products values {data}"
+        ]
+        for sql in sqls:
+            self.cursor.execute(sql)
 
     def set_state(self):
         if self.state == 0:
@@ -234,3 +261,33 @@ class AddResponder(Responder):
 class ProductsResponder(Responder):
     def __init__(self):
         super().__init__()
+        self.__adder = None
+
+    def response(self, text):
+        if self.adder is not None:
+            res = self.adder.response(text)
+            if self.adder.state == 'end':
+                self.adder = None
+                self.exit()
+            return res
+        else:
+            res = self.check_database(text)
+            self.exit()
+            return res
+
+    def check_database(self, text):
+        sql = f"select * from products where name='{text}' order by price/amount limit 3"
+        self.cursor.execute(sql)
+        rows = self.cursor.fetchall()
+        return "\n".join(self.format_products(row) for row in rows)
+
+    @staticmethod
+    def format_products(row):
+        name, amount, price, shop, shop_branch = row
+        if int(amount) == amount:
+            amount = int(amount)
+        return f"{name}({amount}): {price}円 | {shop} {shop_branch}"
+
+    @property
+    def adder(self):
+        return self.__adder
