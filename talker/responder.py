@@ -276,7 +276,7 @@ class ProductsResponder(Responder):
             return res
 
     def check_database(self, text):
-        sql = f"select * from products where name='{text}' order by price/amount limit 3"
+        sql = f"select * from products where name='{text}' order by price/amount limit 5"
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
         return self.format_products(rows)
@@ -292,13 +292,19 @@ class ProductsResponder(Responder):
             name, amount, price, shop, branch = map(str, row)
             if products is None:
                 products = f'{name}\n'
-            amount_length = max((amount_length, len(amount) + 2))
-            price_length = max((price_length, len(price) + 2))
-            shop_length = max((shop_length, len(shop) + 2))
-            branch_length = max((branch_length, len(branch) + 2))
+            amount_length = max((amount_length, len(amount)))
+            price_length = max((price_length, len(price)))
+            shop_length = max((shop_length, len(shop)))
+            branch_length = max((branch_length, len(branch)))
         for row in rows:
-            name, amount, price, shop, branch = map(str, row)
-            products += f'|{amount.center(amount_length)}|{price.center(price_length)}|{shop.center(shop_length)}|{branch.center(branch_length)}|\n'
+            amount, price, shop, branch = map(str, row[1:])
+            values = (
+                amount.center(amount_length, '　'),
+                price.center(price_length, '　'),
+                shop.center(shop_length, '　'),
+                branch.center(branch_length, '　'),
+            )
+            products += '| {} | {} | {} | {} |\n'.format(*values)
         return products.strip()
 
     @property
