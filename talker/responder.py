@@ -279,14 +279,27 @@ class ProductsResponder(Responder):
         sql = f"select * from products where name='{text}' order by price/amount limit 3"
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
-        return "\n".join(self.format_products(row) for row in rows)
+        return self.format_products(rows)
 
     @staticmethod
-    def format_products(row):
-        name, amount, price, shop, shop_branch = row
-        if int(amount) == amount:
-            amount = int(amount)
-        return f"{name}({amount}): {price}円 | {shop} {shop_branch}"
+    def format_products(rows):
+        products: str = None
+        amount_length = 0
+        price_length = 0
+        shop_length = 0
+        branch_length = 0
+        for row in rows:
+            name, amount, price, shop, branch = map(str, row)
+            if products is None:
+                products = f'{name}\n'
+            amount_length = max((amount_length, len(amount) + 2))
+            price_length = max((price_length, len(price) + 2))
+            shop_length = max((shop_length, len(shop) + 2))
+            branch_length = max((branch_length, len(branch) + 2))
+        for row in rows:
+            name, amount, price, shop, branch = map(str, row)
+            products += f'|{amount.center(amount_length)}|{price.center(price_length)}|{shop.center(shop_length)}|{branch.center(branch_length)}|\n'
+        return products.strip()
 
     @property
     def adder(self):
