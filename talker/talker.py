@@ -82,6 +82,9 @@ class Talker:
 
     def delete_user(self, user_id):
         if user_id in self.users:
+            responder = self.users[user_id]['responder']
+            if responder is not None:
+                responder.exit()
             del self.users[user_id]
 
     def schedule(self, interval, f, wait=True):

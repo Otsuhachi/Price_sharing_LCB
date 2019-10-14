@@ -39,10 +39,14 @@ class Responder:
         """
         return self.__state
 
-    def exit(self):
+    def end(self):
         """現在の実行状態を'end'に設定します。
         """
         self.__state = 'end'
+
+    def exit(self):
+        """終了処理を行います。
+        """
         self.cursor.close()
         self.__connection.close()
 
@@ -172,7 +176,7 @@ class AddResponder(Responder):
                 res = "登録しました。"
             else:
                 res = "登録を取り消しました。"
-            self.exit()
+            self.end()
             return res
         if self.state == 'confirm':
             return self.responses[self.state].format(*self.values)
@@ -268,11 +272,11 @@ class ProductsResponder(Responder):
             res = self.adder.response(text)
             if self.adder.state == 'end':
                 self.adder = None
-                self.exit()
+                self.end()
             return res
         else:
             res = self.check_database(text)
-            self.exit()
+            self.end()
             return res
 
     def check_database(self, text):
@@ -283,29 +287,33 @@ class ProductsResponder(Responder):
 
     @staticmethod
     def format_products(rows):
-        products: str = None
+        text: str = None
+        products = []
         amount_length = 0
         price_length = 0
         shop_length = 0
         branch_length = 0
         for row in rows:
             name, amount, price, shop, branch = map(str, row)
-            if products is None:
-                products = f'{name}\n'
+            amount = str(Responder.text2value(amount))
+            price = str(Responder.text2value(price))
+            products.append((amount, price, shop, branch))
+            if text is None:
+                text = f'{name}\n'
             amount_length = max((amount_length, len(amount)))
             price_length = max((price_length, len(price)))
             shop_length = max((shop_length, len(shop)))
             branch_length = max((branch_length, len(branch)))
-        for row in rows:
-            amount, price, shop, branch = map(str, row[1:])
+        for product in products:
+            amount, price, shop, branch = product
             values = (
                 amount.center(amount_length, '　'),
                 price.center(price_length, '　'),
                 shop.center(shop_length, '　'),
                 branch.center(branch_length, '　'),
             )
-            products += '| {} | {} | {} | {} |\n'.format(*values)
-        return products.strip()
+            text += '| {} | {} | {} | {} |\n'.format(*values)
+        return text.strip()
 
     @property
     def adder(self):
