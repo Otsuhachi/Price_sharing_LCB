@@ -48,7 +48,7 @@ class Responder:
         """終了処理を行います。
         """
         self.cursor.close()
-        self.__connection.close()
+        self.connection.close()
 
     @state.setter
     def state(self, value):
@@ -123,6 +123,10 @@ class Responder:
     @property
     def cursor(self):
         return self.__cursor
+
+    @property
+    def connection(self):
+        return self.__connection
 
 
 class AddResponder(Responder):
@@ -200,8 +204,10 @@ class AddResponder(Responder):
                 self.info['shop'] = text
         elif state == 'shop_branch':
             if text:
-                if text[-1] != '店':
-                    text += '店'
+                if text[-2:] == '支店':
+                    text = text[:-2]
+                elif text[-1] == '店':
+                    text = text[:-1]
                 self.info['shop_branch'] = text
         elif state == 'confirm':
             ok_word = ('yes', 'y', 'はい')
@@ -291,8 +297,6 @@ class ProductsResponder(Responder):
         products = []
         amount_length = 0
         price_length = 0
-        shop_length = 0
-        branch_length = 0
         for row in rows:
             name, amount, price, shop, branch = map(str, row)
             amount = str(Responder.text2value(amount))
@@ -302,17 +306,15 @@ class ProductsResponder(Responder):
                 text = f'{name}\n'
             amount_length = max((amount_length, len(amount)))
             price_length = max((price_length, len(price)))
-            shop_length = max((shop_length, len(shop)))
-            branch_length = max((branch_length, len(branch)))
         for product in products:
             amount, price, shop, branch = product
             values = (
                 amount.center(amount_length, '　'),
                 price.center(price_length, '　'),
-                shop.center(shop_length, '　'),
-                branch.center(branch_length, '　'),
+                shop,
+                branch,
             )
-            text += '| {} | {} | {} | {} |\n'.format(*values)
+            text += '{}, {}: {} {}\n'.format(*values)
         return text.strip()
 
     @property
