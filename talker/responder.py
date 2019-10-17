@@ -293,7 +293,7 @@ class ProductsResponder(Responder):
 
     @staticmethod
     def format_products(rows):
-        text: str = None
+        text = ""
         products = []
         amount_length = 0
         price_length = 0
@@ -302,7 +302,7 @@ class ProductsResponder(Responder):
             amount = str(Responder.text2value(amount))
             price = str(Responder.text2value(price))
             products.append((amount, price, shop, branch))
-            if text is None:
+            if not text:
                 text = f'{name}\n'
             amount_length = max((amount_length, len(amount)))
             price_length = max((price_length, len(price)))
