@@ -3,8 +3,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from talker.dictionary import Dictionary
-from talker.responder import AddResponder, ProductsResponder
+from inner.dictionary import Dictionary
+from inner.responder import AddResponder, ProductsResponder
 
 
 class Talker:

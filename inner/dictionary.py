@@ -23,7 +23,7 @@ class Dictionary:
             >>> dic.actions
             [{'pattern': '^(登録|追加|とうろく|ついか|add)', 'status': 'add'}]
         """
-        self.__path = Path('talker', 'dics')
+        self.__path = Path('inner', 'dics')
         self.__pattern_file = self.__path / 'pattern.txt'
         self.__db_file = self.__path / 'db.txt'
         self.__actions = []

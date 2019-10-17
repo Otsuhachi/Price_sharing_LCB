@@ -5,7 +5,7 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
-from talker.talker import Talker
+from inner.talker import Talker
 
 ai = Talker()
 app = Flask(__name__)

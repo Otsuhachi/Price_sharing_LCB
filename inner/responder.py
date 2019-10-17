@@ -1,4 +1,4 @@
-from talker.dictionary import Dictionary
+from inner.dictionary import Dictionary
 import psycopg2
 
 
