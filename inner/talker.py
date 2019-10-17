@@ -3,13 +3,13 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from inner.dictionary import Dictionary
+from inner.loader import Loader
 from inner.responder import AddResponder, ProductsResponder
 
 
 class Talker:
     def __init__(self):
-        self.__dictionary = Dictionary()
+        self.__actions = Loader().actions
         self.__users = {}
         self.__th = threading.Thread(
             target=lambda: self.schedule(30, self.check_timeout, False))
@@ -59,7 +59,7 @@ class Talker:
 
     def set_status(self, user_id, text):
         user = self.users[user_id]
-        for ptn in self.__dictionary.actions:
+        for ptn in self.actions:
             matcher = re.search(ptn['pattern'], text)
             if matcher:
                 user['status'] = ptn['status']
@@ -101,3 +101,7 @@ class Talker:
     @property
     def users(self):
         return self.__users
+
+    @property
+    def actions(self):
+        return self.__actions

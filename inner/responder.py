@@ -1,4 +1,4 @@
-from inner.dictionary import Dictionary
+from inner.loader import Loader
 import psycopg2
 
 
@@ -16,7 +16,7 @@ class Responder:
         self.__create_cursor()
 
     def __create_cursor(self):
-        self.__connection = psycopg2.connect(Dictionary().uri)
+        self.__connection = psycopg2.connect(Loader().uri)
         self.__connection.autocommit = True
         self.__cursor = self.__connection.cursor()
 
@@ -147,13 +147,13 @@ class AddResponder(Responder):
                 self.__infomation[key] = kwargs[key]
 
     def __load(self):
-        dics = Dictionary().add_responses
+        patterns = Loader().add_responses
         self.__keys = []
         self.__responses = {}
-        for dic in dics:
-            for key in dic:
+        for pattern in patterns:
+            for key in pattern:
                 self.__keys.append(key)
-                self.__responses[key] = dic[key]
+                self.__responses[key] = pattern[key]
 
     def response(self, text):
         """AIの応答を生成し、返します。

@@ -3,7 +3,7 @@ import pickle
 import base64
 
 
-class Dictionary:
+class Loader:
     """AIの応答パターンを管理するファイルにアクセスするためのクラスです。
 
 
@@ -18,9 +18,9 @@ class Dictionary:
         読み込んだ定義ファイルを取得する場合は目的の種類のプロパティにアクセスしてください。
 
         Examples:
-            >>> from dictionary import Dictionary
-            >>> dic = Dictionary()
-            >>> dic.actions
+            >>> from loader import Loader
+            >>> loader = Loader()
+            >>> loader.actions
             [{'pattern': '^(登録|追加|とうろく|ついか|add)', 'status': 'add'}]
         """
         self.__path = Path('inner', 'dics')
