@@ -283,6 +283,8 @@ class ProductsResponder(Responder):
         else:
             res = self.retrieve(text)
             self.end()
+            if not res:
+                res = f"{text}が見つかりませんでした。\n登録されていないか、誤字脱字の可能性があります。"
             return res
 
     def retrieve(self, text):
