@@ -1,4 +1,4 @@
-from talker.dictionary import Dictionary
+from inner.loader import Loader
 import psycopg2
 
 
@@ -16,7 +16,7 @@ class Responder:
         self.__create_cursor()
 
     def __create_cursor(self):
-        self.__connection = psycopg2.connect(Dictionary().uri)
+        self.__connection = psycopg2.connect(Loader().uri)
         self.__connection.autocommit = True
         self.__cursor = self.__connection.cursor()
 
@@ -63,7 +63,7 @@ class Responder:
         self.__state = value
 
     @staticmethod
-    def text2value(text, mode='both'):
+    def text_to_value(text, mode='both'):
         """文字列を数値変換し、返します。
 
         modeで変換結果が変わります。
@@ -73,23 +73,23 @@ class Responder:
             Case1:
                 >>> from talker.responder import Responder as R
                 >>> a='2'
-                >>> R.text2value(a)
+                >>> R.text_to_value(a)
                 2
-                >>> R.text2value(a, int)
+                >>> R.text_to_value(a, int)
                 2
-                >>> R.text2value(a, float)
+                >>> R.text_to_value(a, float)
                 2.0
-                >>> str(R.text2value('a'))
+                >>> str(R.text_to_value('a'))
                 'None'
 
             Case2:
                 >>> from talker.responder import Responder as R
                 >>> a='2.3'
-                >>> R.text2value(a)
+                >>> R.text_to_value(a)
                 2.3
-                >>> R.text2value(a, int)
+                >>> R.text_to_value(a, int)
                 2
-                >>> R.text2value(a, float)
+                >>> R.text_to_value(a, float)
                 2.3
 
         Args:
@@ -147,13 +147,13 @@ class AddResponder(Responder):
                 self.__infomation[key] = kwargs[key]
 
     def __load(self):
-        dics = Dictionary().add_responses
+        patterns = Loader().add_responses
         self.__keys = []
         self.__responses = {}
-        for dic in dics:
-            for key in dic:
+        for pattern in patterns:
+            for key in pattern:
                 self.__keys.append(key)
-                self.__responses[key] = dic[key]
+                self.__responses[key] = pattern[key]
 
     def response(self, text):
         """AIの応答を生成し、返します。
@@ -173,10 +173,10 @@ class AddResponder(Responder):
         self.set_state()
         if previous == 0:
             return self.responses[self.state]
-        self.set_infomation_value(text)
+        self.store_infomation_value(text)
         if self.info['confirm'] in ('ok', 'no'):
             if self.info['confirm'] == 'ok':
-                self.push_database()
+                self.send_database()
                 res = "登録しました。"
             else:
                 res = "登録を取り消しました。"
@@ -186,17 +186,17 @@ class AddResponder(Responder):
             return self.responses[self.state].format(*self.values)
         return self.responses[self.state]
 
-    def set_infomation_value(self, text):
+    def store_infomation_value(self, text):
         state = self.state
         if state == 'name':
             if text:
                 self.info['name'] = text
         elif state == 'amount':
-            value = self.text2value(text)
+            value = self.text_to_value(text)
             if value is not None:
                 self.info['amount'] = value
         elif state == 'price':
-            value = self.text2value(text, int)
+            value = self.text_to_value(text, int)
             if value is not None:
                 self.info['price'] = value
         elif state == 'shop':
@@ -220,7 +220,7 @@ class AddResponder(Responder):
                     self.info['confirm'] = 'no'
         self.set_state()
 
-    def push_database(self):
+    def send_database(self):
         del_data = (self.info['name'], self.info['amount'], self.info['shop'],
                     self.info['shop_branch'])
         data = tuple(self.info[key] for key in self.keys if key != 'confirm')
@@ -281,26 +281,25 @@ class ProductsResponder(Responder):
                 self.end()
             return res
         else:
-            res = self.check_database(text)
+            res = self.retrieve(text)
             self.end()
             return res
 
-    def check_database(self, text):
+    def retrieve(self, text):
         sql = f"select * from products where name='{text}' order by price/amount limit 5"
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
         return self.format_products(rows)
 
-    @staticmethod
-    def format_products(rows):
+    def format_products(self, rows):
         text = ""
         products = []
         amount_length = 0
         price_length = 0
         for row in rows:
             name, amount, price, shop, branch = map(str, row)
-            amount = str(Responder.text2value(amount))
-            price = str(Responder.text2value(price))
+            amount = str(self.text_to_value(amount))
+            price = str(self.text_to_value(price))
             products.append((amount, price, shop, branch))
             if not text:
                 text = f'{name}\n'
