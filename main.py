@@ -7,7 +7,7 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 from inner.talker import Talker
 
-ai = Talker()
+talker = Talker()
 app = Flask(__name__)
 YOUR_CHANNEL_ACCESS_TOKEN = os.environ['YOUR_CHANNEL_ACCESS_TOKEN']
 YOUR_CHANNEL_SECRET = os.environ['YOUR_CHANNEL_SECRET']
@@ -33,7 +33,7 @@ def callback():
 def handle_message(event):
     text = event.message.text
     user_id = event.source.user_id
-    res = ai.dialogue(user_id, text)
+    res = talker.dialogue(user_id, text)
     if res is None:
         return
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=res))
