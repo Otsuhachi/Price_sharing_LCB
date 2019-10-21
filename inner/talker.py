@@ -31,6 +31,31 @@ class Talker:
         self.__th.setDaemon(True)
         self.__th.start()
 
+    def check_timeout(self):
+        """usersに登録されているユーザーのtimeoutを確認し、過ぎていればそのユーザーの登録を解除します。
+        """
+        del_users = []
+        for user in self.users:
+            timeout = self.users[user]['timeout']
+            if timeout < datetime.now():
+                del_users.append(user)
+                print(f"delete: {user}")
+        for user in del_users:
+            self.delete_user(user)
+
+    def delete_user(self, user_id):
+        """ユーザーを削除します。
+        Responderを保持している場合は閉じてから削除します。
+
+        Args:
+            user_id (str): ユーザーID。
+        """
+        if user_id in self.users:
+            responder = self.users[user_id]['responder']
+            if responder is not None:
+                responder.exit()
+            del self.users[user_id]
+
     def dialogue(self, user_id, text):
         """ユーザーIDと文字列を受け取り、ユーザー毎に保持しているResponderからの応答を返します。
 
@@ -67,6 +92,24 @@ class Talker:
         self.set_responder(user_id)
         self.set_timeout(user_id)
 
+    def schedule(self, interval, f, wait=True):
+        """指定した関数を定期的に実行するスレッドを生成します。
+
+        Args:
+            interval (int): 実行間隔。
+            f (func): 実行する関数。
+            wait (bool, optional): 実行中に待機するかどうか。
+        """
+        base_time = time.time()
+        next_time = 0
+        while True:
+            t = threading.Thread(target=f)
+            t.start()
+            if wait:
+                t.join()
+            next_time = ((base_time - time.time()) % interval) or interval
+            time.sleep(next_time)
+
     def set_responder(self, user_id):
         """ユーザーのstatusに応じてResponderを生成し、保持します。
 
@@ -82,22 +125,6 @@ class Talker:
         elif status == 'products':
             responder = ProductResponder()
         user['responder'] = responder
-
-    def set_timeout(self, user_id, **timeout):
-        """ユーザーにタイムアウトを設定します。
-
-        Args:
-            user_id (str): ユーザーID。
-        """
-        options = ('days', 'seconds', 'microseconds', 'milliseconds',
-                   'minutes', 'hours', 'weeks')
-        if not all(x in options for x in timeout):
-            err = f"timeoutに不正な値が入力されています。初期値に設定されました。\n{timeout}"
-            print(err)
-            timeout = None
-        if not timeout:
-            timeout = {'minutes': 3}
-        self.users[user_id]['timeout'] = datetime.now() + timedelta(**timeout)
 
     def set_status(self, user_id, text):
         """ユーザーにstatusを設定します。
@@ -118,57 +145,21 @@ class Talker:
                 status = 'products'
             user['status'] = status
 
-    def check_timeout(self):
-        """usersに登録されているユーザーのtimeoutを確認し、過ぎていればそのユーザーの登録を解除します。
-        """
-        del_users = []
-        for user in self.users:
-            timeout = self.users[user]['timeout']
-            if timeout < datetime.now():
-                del_users.append(user)
-                print(f"delete: {user}")
-        for user in del_users:
-            self.delete_user(user)
-
-    def delete_user(self, user_id):
-        """ユーザーを削除します。
-        Responderを保持している場合は閉じてから削除します。
+    def set_timeout(self, user_id, **timeout):
+        """ユーザーにタイムアウトを設定します。
 
         Args:
             user_id (str): ユーザーID。
         """
-        if user_id in self.users:
-            responder = self.users[user_id]['responder']
-            if responder is not None:
-                responder.exit()
-            del self.users[user_id]
-
-    def schedule(self, interval, f, wait=True):
-        """指定した関数を定期的に実行するスレッドを生成します。
-
-        Args:
-            interval (int): 実行間隔。
-            f (func): 実行する関数。
-            wait (bool, optional): 実行中に待機するかどうか。
-        """
-        base_time = time.time()
-        next_time = 0
-        while True:
-            t = threading.Thread(target=f)
-            t.start()
-            if wait:
-                t.join()
-            next_time = ((base_time - time.time()) % interval) or interval
-            time.sleep(next_time)
-
-    @property
-    def users(self):
-        """ユーザーを登録しておく辞書です。
-
-        Returns:
-            dict: ユーザーを登録しておく辞書。
-        """
-        return self.__users
+        options = ('days', 'seconds', 'microseconds', 'milliseconds',
+                   'minutes', 'hours', 'weeks')
+        if not all(x in options for x in timeout):
+            err = f"timeoutに不正な値が入力されています。初期値に設定されました。\n{timeout}"
+            print(err)
+            timeout = None
+        if not timeout:
+            timeout = {'minutes': 3}
+        self.users[user_id]['timeout'] = datetime.now() + timedelta(**timeout)
 
     @property
     def actions(self):
@@ -178,3 +169,12 @@ class Talker:
             dict: 反応する特別な文字列の辞書。
         """
         return self.__actions
+
+    @property
+    def users(self):
+        """ユーザーを登録しておく辞書です。
+
+        Returns:
+            dict: ユーザーを登録しておく辞書。
+        """
+        return self.__users

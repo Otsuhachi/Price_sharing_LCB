@@ -11,12 +11,6 @@ class Responder:
         connection(psycopg2.connect): データベースとの接続です。
         cursor(connect.cursor): カーソルです。
     """
-    def __init__(self):
-        """初期化します。
-        """
-        self.__state = 0
-        self.__create_cursor(True)
-
     def __create_cursor(self, commit=False):
         """データベースの接続とカーソルを用意します。
 
@@ -27,24 +21,11 @@ class Responder:
         self.__connection.autocommit = commit
         self.__cursor = self.__connection.cursor()
 
-    def response(self, text):
-        """AIの応答を生成し、返します。
-        子クラスにて独自定義してください。
-
-        Args:
-            text (str): ユーザーからの入力。
+    def __init__(self):
+        """初期化します。
         """
-        raise NotImplementedError
-
-    @property
-    def state(self):
-        """現在の実行状態です。
-        0, 'end' 以外の状態は独自に設定可能です。
-
-        Returns:
-            int or str: 現在の実行状態。
-        """
-        return self.__state
+        self.__state = 0
+        self.__create_cursor(True)
 
     def end(self):
         """現在の実行状態を'end'に設定します。
@@ -56,6 +37,43 @@ class Responder:
         """
         self.cursor.close()
         self.connection.close()
+
+    def response(self, text):
+        """AIの応答を生成し、返します。
+        子クラスにて独自定義してください。
+
+        Args:
+            text (str): ユーザーからの入力。
+        """
+        raise NotImplementedError
+
+    @property
+    def connection(self):
+        """データベースの接続です。
+
+        Returns:
+            psycopg2.connect: データベースの接続。
+        """
+        return self.__connection
+
+    @property
+    def cursor(self):
+        """sqlの発行を行い、結果を格納します。
+
+        Returns:
+            connect.cursor: カーソル。
+        """
+        return self.__cursor
+
+    @property
+    def state(self):
+        """現在の実行状態です。
+        0, 'end' 以外の状態は独自に設定可能です。
+
+        Returns:
+            int or str: 現在の実行状態。
+        """
+        return self.__state
 
     @state.setter
     def state(self, value):
@@ -127,24 +145,6 @@ class Responder:
         elif mode == int:
             return i
 
-    @property
-    def cursor(self):
-        """sqlの発行を行い、結果を格納します。
-
-        Returns:
-            connect.cursor: カーソル。
-        """
-        return self.__cursor
-
-    @property
-    def connection(self):
-        """データベースの接続です。
-
-        Returns:
-            psycopg2.connect: データベースの接続。
-        """
-        return self.__connection
-
 
 class AddResponder(Responder):
     """商品情報を追加するためのレスポンダです。
@@ -177,19 +177,6 @@ class AddResponder(Responder):
                 self.__keys.append(key)
                 self.__responses[key] = pattern[key]
 
-    def response(self, text):
-        """応答を生成し、返します。
-        受け取った文字列に応じて、商品情報登録の進捗制御、返信の作成を行います。
-
-        Args:
-            text (str): ユーザーからの入力。
-
-        Returns:
-            str: AIからの応答。
-        """
-        res = self.add_infomation(text)
-        return res
-
     def add_infomation(self, text):
         """文字列を受け取り、未設定の商品情報を登録していきます。
         また、次に必要な情報を促す文字列を返します。
@@ -216,6 +203,34 @@ class AddResponder(Responder):
         if self.state == 'confirm':
             return self.responses[self.state].format(*self.values)
         return self.responses[self.state]
+
+    def response(self, text):
+        """応答を生成し、返します。
+        受け取った文字列に応じて、商品情報登録の進捗制御、返信の作成を行います。
+
+        Args:
+            text (str): ユーザーからの入力。
+
+        Returns:
+            str: AIからの応答。
+        """
+        res = self.add_infomation(text)
+        return res
+
+    def send_database(self):
+        """完成した商品情報をデータベースに登録します。
+        商品名、分量、店、支店名が同じ商品が存在する場合、今回の商品情報で更新されます。
+        """
+        del_data = (self.info['name'], self.info['amount'], self.info['shop'],
+                    self.info['shop_branch'])
+        data = tuple(self.info[key] for key in self.keys if key != 'confirm')
+
+        sqls = [
+            "delete from products where name='{}' and amount={} and shop='{}' and shop_branch='{}'"
+            .format(*del_data), f"insert into products values {data}"
+        ]
+        for sql in sqls:
+            self.cursor.execute(sql)
 
     def store_infomation_value(self, text):
         """文字列を受け取り、現在のstateに応じて商品情報を登録していきます。
@@ -257,21 +272,6 @@ class AddResponder(Responder):
                     self.info['confirm'] = 'no'
         self.update_state()
 
-    def send_database(self):
-        """完成した商品情報をデータベースに登録します。
-        商品名、分量、店、支店名が同じ商品が存在する場合、今回の商品情報で更新されます。
-        """
-        del_data = (self.info['name'], self.info['amount'], self.info['shop'],
-                    self.info['shop_branch'])
-        data = tuple(self.info[key] for key in self.keys if key != 'confirm')
-
-        sqls = [
-            "delete from products where name='{}' and amount={} and shop='{}' and shop_branch='{}'"
-            .format(*del_data), f"insert into products values {data}"
-        ]
-        for sql in sqls:
-            self.cursor.execute(sql)
-
     def update_state(self):
         """現在の商品情報の完成度に応じてstateを更新します。
         """
@@ -284,23 +284,14 @@ class AddResponder(Responder):
                 self.state = key
                 return
 
-    def show(self):
-        """現在の商品情報を表示します。
-        """
-        print("商品情報")
-        for key in self.info:
-            print(f"{key}: {self.info[key]}")
-
     @property
-    def values(self):
-        """商品名, 分量, 価格, 店, 支店名の順のタプルを返します。
+    def info(self):
+        """商品情報を登録する辞書です。
 
         Returns:
-            tuple: 商品名, 分量, 価格, 店, 支店名。
+            dict: 商品情報。
         """
-        i = self.info
-        return (i['name'], i['amount'], i['price'], i['shop'],
-                i['shop_branch'])
+        return self.__infomation
 
     @property
     def keys(self):
@@ -312,15 +303,6 @@ class AddResponder(Responder):
         return self.__keys
 
     @property
-    def info(self):
-        """商品情報を登録する辞書です。
-
-        Returns:
-            dict: 商品情報。
-        """
-        return self.__infomation
-
-    @property
     def responses(self):
         """応答パターンの辞書です。
 
@@ -328,6 +310,17 @@ class AddResponder(Responder):
             dict: 応答パターン。
         """
         return self.__responses
+
+    @property
+    def values(self):
+        """商品名, 分量, 価格, 店, 支店名の順のタプルを返します。
+
+        Returns:
+            tuple: 商品名, 分量, 価格, 店, 支店名。
+        """
+        i = self.info
+        return (i['name'], i['amount'], i['price'], i['shop'],
+                i['shop_branch'])
 
 
 class ProductResponder(Responder):
@@ -348,6 +341,39 @@ class ProductResponder(Responder):
         """
         super().__init__()
         self.__adder: AddResponder = None
+
+    def format_products(self, rows):
+        """商品情報群を受け取り、文字列として整形して返します。
+
+        Args:
+            rows (list[tuple]): 商品情報群。
+
+        Returns:
+            str: 商品情報。
+        """
+        text = ""
+        products = []
+        amount_length = 0
+        price_length = 0
+        for row in rows:
+            name, amount, price, shop, branch = map(str, row)
+            amount = str(self.text_to_value(amount))
+            price = str(self.text_to_value(price))
+            products.append((amount, price, shop, branch))
+            if not text:
+                text = f'{name}\n'
+            amount_length = max((amount_length, len(amount)))
+            price_length = max((price_length, len(price)))
+        for product in products:
+            amount, price, shop, branch = product
+            values = (
+                amount.center(amount_length, '　'),
+                price.center(price_length, '　'),
+                shop,
+                branch,
+            )
+            text += '{}, {}: {} {}\n'.format(*values)
+        return text.strip()
 
     def response(self, text):
         """文字列を受け取り、商品情報を単価の安い順でソートして返します。
@@ -385,39 +411,6 @@ class ProductResponder(Responder):
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
         return self.format_products(rows)
-
-    def format_products(self, rows):
-        """商品情報群を受け取り、文字列として整形して返します。
-
-        Args:
-            rows (list[tuple]): 商品情報群。
-
-        Returns:
-            str: 商品情報。
-        """
-        text = ""
-        products = []
-        amount_length = 0
-        price_length = 0
-        for row in rows:
-            name, amount, price, shop, branch = map(str, row)
-            amount = str(self.text_to_value(amount))
-            price = str(self.text_to_value(price))
-            products.append((amount, price, shop, branch))
-            if not text:
-                text = f'{name}\n'
-            amount_length = max((amount_length, len(amount)))
-            price_length = max((price_length, len(price)))
-        for product in products:
-            amount, price, shop, branch = product
-            values = (
-                amount.center(amount_length, '　'),
-                price.center(price_length, '　'),
-                shop,
-                branch,
-            )
-            text += '{}, {}: {} {}\n'.format(*values)
-        return text.strip()
 
     @property
     def adder(self):
