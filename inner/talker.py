@@ -8,7 +8,22 @@ from inner.responder import AddResponder, ProductResponder
 
 
 class Talker:
+    """文字列を受け取り、それに応じた処理を行います。
+    特定のパターンに一致する場合には商品をデータベースに登録する動作を行します。
+    一致しない場合は商品検索モードで動作します。
+
+
+    Attributes:
+        users: 現在処理を行っている最中のユーザーの辞書です。
+        actions: アクションを行う反応パターンです。
+    """
     def __init__(self):
+        """文字列を受け取り、処理を返します。
+
+        反応パターンを読み込みます。
+        ユーザーの辞書を用意します。
+        定期的にタイムアウトしたユーザーを辞書から削除します。
+        """
         self.__actions = Loader().actions
         self.__users = {}
         self.__th = threading.Thread(
@@ -17,6 +32,15 @@ class Talker:
         self.__th.start()
 
     def dialogue(self, user_id, text):
+        """ユーザーIDと文字列を受け取り、ユーザー毎に保持しているResponderからの応答を返します。
+
+        Args:
+            user_id (str): ユーザーID。
+            text (str): 文字列。
+
+        Returns:
+            str: Responderからの応答。
+        """
         self.entry_user(user_id, text)
         user = self.users[user_id]
         responder = user['responder']
@@ -26,6 +50,14 @@ class Talker:
         return res
 
     def entry_user(self, user_id, text):
+        """ユーザーを登録します。
+        受け取ったuser_idをキーにします。
+        受け取った文字列を基にResponder, status, timeoutを値にします。
+
+        Args:
+            user_id (str): ユーザーID.
+            text (str): 文字列。
+        """
         self.users.setdefault(user_id, {
             'responder': None,
             'status': None,
@@ -36,6 +68,11 @@ class Talker:
         self.set_timeout(user_id)
 
     def set_responder(self, user_id):
+        """ユーザーのstatusに応じてResponderを生成し、保持します。
+
+        Args:
+            user_id (str): ユーザID。
+        """
         user = self.users[user_id]
         if user['responder'] is not None:
             return
@@ -47,6 +84,11 @@ class Talker:
         user['responder'] = responder
 
     def set_timeout(self, user_id, **timeout):
+        """ユーザーにタイムアウトを設定します。
+
+        Args:
+            user_id (str): ユーザーID。
+        """
         options = ('days', 'seconds', 'microseconds', 'milliseconds',
                    'minutes', 'hours', 'weeks')
         if not all(x in options for x in timeout):
@@ -58,6 +100,12 @@ class Talker:
         self.users[user_id]['timeout'] = datetime.now() + timedelta(**timeout)
 
     def set_status(self, user_id, text):
+        """ユーザーにstatusを設定します。
+
+        Args:
+            user_id (str): ユーザーID。
+            text (str): 文字列。
+        """
         user = self.users[user_id]
         for ptn in self.actions:
             matcher = re.search(ptn['pattern'], text)
@@ -71,6 +119,8 @@ class Talker:
             user['status'] = status
 
     def check_timeout(self):
+        """usersに登録されているユーザーのtimeoutを確認し、過ぎていればそのユーザーの登録を解除します。
+        """
         del_users = []
         for user in self.users:
             timeout = self.users[user]['timeout']
@@ -81,6 +131,12 @@ class Talker:
             self.delete_user(user)
 
     def delete_user(self, user_id):
+        """ユーザーを削除します。
+        Responderを保持している場合は閉じてから削除します。
+
+        Args:
+            user_id (str): ユーザーID。
+        """
         if user_id in self.users:
             responder = self.users[user_id]['responder']
             if responder is not None:
@@ -88,6 +144,13 @@ class Talker:
             del self.users[user_id]
 
     def schedule(self, interval, f, wait=True):
+        """指定した関数を定期的に実行するスレッドを生成します。
+
+        Args:
+            interval (int): 実行間隔。
+            f (func): 実行する関数。
+            wait (bool, optional): 実行中に待機するかどうか。
+        """
         base_time = time.time()
         next_time = 0
         while True:
@@ -100,8 +163,18 @@ class Talker:
 
     @property
     def users(self):
+        """ユーザーを登録しておく辞書です。
+
+        Returns:
+            dict: ユーザーを登録しておく辞書。
+        """
         return self.__users
 
     @property
     def actions(self):
+        """反応する特別な文字列の辞書です。
+
+        Returns:
+            dict: 反応する特別な文字列の辞書。
+        """
         return self.__actions

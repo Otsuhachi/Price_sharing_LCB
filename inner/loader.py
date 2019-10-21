@@ -11,6 +11,7 @@ class Loader:
         actions (list[dict]): AIの行動の定義群です。
         add_responses (list[dict]): AddResponder用の定義群です。
         todo (list[dict]): 実装予定の定義群です。
+        uri (str): Postgresqlに接続する情報です。
     """
     def __init__(self):
         """定義ファイルを読み込みます。
@@ -63,6 +64,11 @@ class Loader:
 
     @property
     def add_responses(self):
+        """AddResponder用の定義群です。
+
+        Returns:
+            list[dict]: AddResponder用の定義群。
+        """
         return self.__add_responses
 
     @property
@@ -76,6 +82,11 @@ class Loader:
 
     @property
     def uri(self):
+        """データベースに接続するための情報です。
+
+        Returns:
+            str: データベースに接続するための情報。
+        """
         return self.__uri
 
 
