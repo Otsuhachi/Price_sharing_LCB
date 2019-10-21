@@ -8,16 +8,23 @@ class Responder:
     Attributes:
         state (int or str): 実行状態を表します。
             0が初期化直後で、処理を完了し不要になった状態を"end"としてください。
+        connection(psycopg2.connect): データベースとの接続です。
+        cursor(connect.cursor): カーソルです。
     """
     def __init__(self):
         """初期化します。
         """
         self.__state = 0
-        self.__create_cursor()
+        self.__create_cursor(True)
 
-    def __create_cursor(self):
+    def __create_cursor(self, commit=False):
+        """データベースの接続とカーソルを用意します。
+
+        Args:
+            commit (bool, optional): sqlを発行した際、データベースに結果を反映するかどうか。 標準では反映させません。
+        """
         self.__connection = psycopg2.connect(Loader().uri)
-        self.__connection.autocommit = True
+        self.__connection.autocommit = commit
         self.__cursor = self.__connection.cursor()
 
     def response(self, text):
@@ -122,19 +129,31 @@ class Responder:
 
     @property
     def cursor(self):
+        """sqlの発行を行い、結果を格納します。
+
+        Returns:
+            connect.cursor: カーソル。
+        """
         return self.__cursor
 
     @property
     def connection(self):
+        """データベースの接続です。
+
+        Returns:
+            psycopg2.connect: データベースの接続。
+        """
         return self.__connection
 
 
 class AddResponder(Responder):
-    """商品情報を追加するためのAIの思考エンジンクラスです。
+    """商品情報を追加するためのレスポンダです。
 
     Attributes:
         keys (tuple[str]): stateに設定するキー群です。 これを使って商品登録の進捗を制御します。
-        infomation: 商品情報です。
+        info: 商品情報の辞書です。
+        values(tuple[any]): 商品情報のタプルです。
+        responses(dict): 応答パターンです。
     """
     def __init__(self, **kwargs):
         """商品情報を追加します。
@@ -147,6 +166,9 @@ class AddResponder(Responder):
                 self.__infomation[key] = kwargs[key]
 
     def __load(self):
+        """反応する文字列パターンを読み込みます。
+        また、設定に必要なキー群を読み込み設定します。
+        """
         patterns = Loader().add_responses
         self.__keys = []
         self.__responses = {}
@@ -156,8 +178,8 @@ class AddResponder(Responder):
                 self.__responses[key] = pattern[key]
 
     def response(self, text):
-        """AIの応答を生成し、返します。
-        受け取った文字列に応じて、商品情報登録の進捗制御、返信メッセージの作成を行います。
+        """応答を生成し、返します。
+        受け取った文字列に応じて、商品情報登録の進捗制御、返信の作成を行います。
 
         Args:
             text (str): ユーザーからの入力。
@@ -169,8 +191,17 @@ class AddResponder(Responder):
         return res
 
     def add_infomation(self, text):
+        """文字列を受け取り、未設定の商品情報を登録していきます。
+        また、次に必要な情報を促す文字列を返します。
+
+        Args:
+            text (str): 文字列。
+
+        Returns:
+            str: 次に必要な情報を促す文字列。
+        """
         previous = self.state
-        self.set_state()
+        self.update_state()
         if previous == 0:
             return self.responses[self.state]
         self.store_infomation_value(text)
@@ -187,6 +218,12 @@ class AddResponder(Responder):
         return self.responses[self.state]
 
     def store_infomation_value(self, text):
+        """文字列を受け取り、現在のstateに応じて商品情報を登録していきます。
+        最後に、最新のstateに更新します。
+
+        Args:
+            text (str): stateに応じた文字列。
+        """
         state = self.state
         if state == 'name':
             if text:
@@ -218,9 +255,12 @@ class AddResponder(Responder):
                     self.info['confirm'] = 'ok'
                 elif text in no_word:
                     self.info['confirm'] = 'no'
-        self.set_state()
+        self.update_state()
 
     def send_database(self):
+        """完成した商品情報をデータベースに登録します。
+        商品名、分量、店、支店名が同じ商品が存在する場合、今回の商品情報で更新されます。
+        """
         del_data = (self.info['name'], self.info['amount'], self.info['shop'],
                     self.info['shop_branch'])
         data = tuple(self.info[key] for key in self.keys if key != 'confirm')
@@ -232,7 +272,9 @@ class AddResponder(Responder):
         for sql in sqls:
             self.cursor.execute(sql)
 
-    def set_state(self):
+    def update_state(self):
+        """現在の商品情報の完成度に応じてstateを更新します。
+        """
         if self.state == 0:
             self.state = 'name'
             return
@@ -251,49 +293,108 @@ class AddResponder(Responder):
 
     @property
     def values(self):
+        """商品名, 分量, 価格, 店, 支店名の順のタプルを返します。
+
+        Returns:
+            tuple: 商品名, 分量, 価格, 店, 支店名。
+        """
         i = self.info
         return (i['name'], i['amount'], i['price'], i['shop'],
                 i['shop_branch'])
 
     @property
     def keys(self):
+        """商品名, 分量, 価格, 店, 支店名の順のキータプルを返します。
+
+        Returns:
+            tuple: 商品名, 分量, 価格, 店, 支店名のキー。
+        """
         return self.__keys
 
     @property
     def info(self):
+        """商品情報を登録する辞書です。
+
+        Returns:
+            dict: 商品情報。
+        """
         return self.__infomation
 
     @property
     def responses(self):
+        """応答パターンの辞書です。
+
+        Returns:
+            dict: 応答パターン。
+        """
         return self.__responses
 
 
-class ProductsResponder(Responder):
+class ProductResponder(Responder):
+    """商品情報を返すレスポンダです。
+    データベースを参照し、単価が安い順番に並べて返します。
+
+    商品が見つからなかった場合に商品を登録するか確認し、AddResponderを生成、保持します。
+    また、AddResponderを保持している間はAddResponderとして振舞います。
+
+    ※AddResponderの保持、振舞いは未定義です。
+    今後のバージョンアップで追加します。
+
+    Attributes
+    adder (AddResponder): 商品情報を追加するレスポンダです。
+    """
     def __init__(self):
+        """商品情報を参照します。
+        """
         super().__init__()
-        self.__adder = None
+        self.__adder: AddResponder = None
 
     def response(self, text):
+        """文字列を受け取り、商品情報を単価の安い順でソートして返します。
+        AddResponderを保持している場合はAddResponderとして振舞います。
+
+        Args:
+            text (str): 検索したい文字列。
+
+        Returns:
+            str: 検索結果。または、AddReponderとしての応答。
+        """
         if self.adder is not None:
             res = self.adder.response(text)
             if self.adder.state == 'end':
+                self.adder.exit()
                 self.adder = None
                 self.end()
             return res
-        else:
-            res = self.retrieve(text)
-            self.end()
-            if not res:
-                res = f"{text}が見つかりませんでした。\n登録されていないか、誤字脱字の可能性があります。"
-            return res
+        res = self.retrieve(text)
+        self.end()
+        if not res:
+            res = f"{text}が見つかりませんでした。\n登録されていないか、誤字脱字の可能性があります。"
+        return res
 
     def retrieve(self, text):
+        """データベースから商品情報を受け取り、整形して返します。
+
+        Args:
+            text (str): 商品名。
+
+        Returns:
+            str: 商品情報。
+        """
         sql = f"select * from products where name='{text}' order by price/amount limit 5"
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
         return self.format_products(rows)
 
     def format_products(self, rows):
+        """商品情報群を受け取り、文字列として整形して返します。
+
+        Args:
+            rows (list[tuple]): 商品情報群。
+
+        Returns:
+            str: 商品情報。
+        """
         text = ""
         products = []
         amount_length = 0
@@ -320,4 +421,9 @@ class ProductsResponder(Responder):
 
     @property
     def adder(self):
+        """商品情報を登録するレスポンダです。
+
+        Returns:
+            AddResponder or None: 商品情報を登録するレスポンダです。必要ないときはNoneです。
+        """
         return self.__adder

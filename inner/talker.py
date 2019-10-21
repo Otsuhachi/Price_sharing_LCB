@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta
 
 from inner.loader import Loader
-from inner.responder import AddResponder, ProductsResponder
+from inner.responder import AddResponder, ProductResponder
 
 
 class Talker:
@@ -43,7 +43,7 @@ class Talker:
         if status == 'add':
             responder = AddResponder()
         elif status == 'products':
-            responder = ProductsResponder()
+            responder = ProductResponder()
         user['responder'] = responder
 
     def set_timeout(self, user_id, **timeout):
