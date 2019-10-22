@@ -1,6 +1,6 @@
-from pathlib import Path
-import pickle
 import base64
+import pickle
+from pathlib import Path
 
 
 class Loader:

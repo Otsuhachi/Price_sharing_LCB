@@ -1,6 +1,9 @@
-from inner.loader import Loader
+import re
+
 import psycopg2
+
 from inner.funcs import generate_words, text_to_value
+from inner.loader import Loader
 
 
 class Responder:
@@ -134,18 +137,61 @@ class AddResponder(Responder):
         self.update_state()
         if previous == 0:
             return self.responses[self.state]
+        if self.state == 'has_refill':
+            num = text_to_value(text, int)
+            if num == 0:
+                self.info['name'] += "詰替"
+            elif num == 1:
+                self.info['name'] += "本体"
+            else:
+                return self.responses[self.state].format(self.info['name'])
+            return self.commit()
         self.store_infomation_value(text)
         if self.info['confirm'] in ('ok', 'no'):
-            if self.info['confirm'] == 'ok':
-                self.send_database()
-                res = "登録しました。"
-            else:
-                res = "登録を取り消しました。"
-            self.end()
-            return res
+            return self.commit()
         if self.state == 'confirm':
             return self.responses[self.state].format(*self.values)
         return self.responses[self.state]
+
+    def commit(self):
+        """登録作業の完了を試みます。
+        無事登録できた場合、あるいは登録しなかった場合にはこのレスポンダは終了状態になります。
+        データベースに登録する作業に問題があった場合は処理が継続します。
+
+        Returns:
+            str: 結果を表示する文字列。
+        """
+        if self.info['confirm'] == 'ok':
+            if self.send_database():
+                res = "登録しました。"
+            else:
+                self.state = 'has_refill'
+                return self.responses[self.state].format(self.info['name'])
+        else:
+            res = "登録を取り消しました。"
+        self.end()
+        return res
+
+    def format_product_name(self):
+        """商品名末尾に詰め替えを表す語句がある場合適切な形式に置換します。
+        """
+        self.info['name'] = re.sub('詰め?替え?', '詰替', self.info['name'])
+
+    def need_distinction(self):
+        """商品を登録する際、"本体"あるいは"詰替"という区別の追加が必要かどうかを返します。
+        すでに商品名末尾が"本体"あるいは"詰替"である場合はFalseとして扱います。
+
+        Returns:
+            bool: 区別の追加が必要かどうか。
+        """
+        name = self.info['name']
+        if len(name) < 2:
+            return False
+        if name[-2:] in ('本体', '詰替'):
+            return False
+        sql = f"select name from products where name ~ '{name}詰め?替え?$' or name ~ '{name}本体$'"
+        self.cursor.execute(sql)
+        return bool(self.cursor.fetchall())
 
     def response(self, text):
         """応答を生成し、返します。
@@ -164,16 +210,19 @@ class AddResponder(Responder):
         """完成した商品情報をデータベースに登録します。
         商品名、分量、店、支店名が同じ商品が存在する場合、今回の商品情報で更新されます。
         """
+        self.format_product_name()
+        if self.need_distinction():
+            return False
         del_data = (self.info['name'], self.info['amount'], self.info['shop'],
                     self.info['shop_branch'])
-        data = tuple(self.info[key] for key in self.keys if key != 'confirm')
-
+        data = self.values
         sqls = [
             "delete from products where name='{}' and amount={} and shop='{}' and shop_branch='{}'"
             .format(*del_data), f"insert into products values {data}"
         ]
         for sql in sqls:
             self.cursor.execute(sql)
+        return True
 
     def store_infomation_value(self, text):
         """文字列を受け取り、現在のstateに応じて商品情報を登録していきます。
@@ -218,6 +267,8 @@ class AddResponder(Responder):
     def update_state(self):
         """現在の商品情報の完成度に応じてstateを更新します。
         """
+        if self.state == 'has_refill':
+            return
         if self.state == 0:
             self.state = 'name'
             return
@@ -319,10 +370,8 @@ class ProductResponder(Responder):
         base_sql = "select name from products where name ~* '{}'"
         for word in generate_words(text):
             sql = base_sql.format(word)
-            print(f"sql: {sql}")  # Debug
             self.cursor.execute(sql)
             rows = self.cursor.fetchall()
-            print(f"rows: {rows}")  # Debug
             if rows:
                 res = f'目当ての商品があれば対応する番号を入力してください。\n無ければそれ以外の文字を送信してください。\n'
                 for n, name in enumerate(set(str(x[0]) for x in rows)):
