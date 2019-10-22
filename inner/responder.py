@@ -392,8 +392,12 @@ class ProductResponder(Responder):
                 self.adder = None
                 self.end()
             return res
-        res = self.retrieve(text)
-        self.end()
+        if text in ('-s', '--show'):
+            res = self.show_products()
+            self.end()
+        else:
+            res = self.retrieve(text)
+            self.end()
         if not res:
             res = f"{text}が見つかりませんでした。\n登録されていないか、誤字脱字の可能性があります。"
         return res
@@ -407,10 +411,20 @@ class ProductResponder(Responder):
         Returns:
             str: 商品情報。
         """
-        sql = f"select * from products where name='{text}' order by price/amount limit 5"
+        sql = f"select * from products where name='{text}' order by price/amount,amount limit 5"
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
         return self.format_products(rows)
+
+    def show_products(self):
+        """データベースに登録されている商品名の一覧を返します。
+
+        Returns:
+            str: 商品名一覧。
+        """
+        sql = "select name from products order by name"
+        self.cursor.execute(sql)
+        return "\n".join(set(str(x[0]) for x in self.cursor.fetchall()))
 
     @property
     def adder(self):
