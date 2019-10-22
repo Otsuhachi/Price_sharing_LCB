@@ -73,7 +73,7 @@ class Talker:
             self.delete_user(user_id)
             return res
         responder = user['responder']
-        res = responder.response(text)
+        res = responder.response(text.strip())
         if responder.state == 'end':
             self.delete_user(user_id)
         return res

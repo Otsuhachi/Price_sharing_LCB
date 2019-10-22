@@ -1,5 +1,6 @@
 from inner.loader import Loader
 import psycopg2
+from inner.funcs import generate_words
 
 
 class Responder:
@@ -341,6 +342,7 @@ class ProductResponder(Responder):
         """
         super().__init__()
         self.__adder: AddResponder = None
+        self.__guess = {}
 
     def format_products(self, rows):
         """商品情報群を受け取り、文字列として整形して返します。
@@ -373,10 +375,36 @@ class ProductResponder(Responder):
                 branch,
             )
             text += '{}, {}: {} {}\n'.format(*values)
-        return text.strip()
+        return text
+
+    def guess_product(self, text):
+        """文字列を受け取り、その文字列がなるべく長く一致する商品を探し、一覧を返します。
+        また、見つかった候補をguess[番号]=名前として登録していきます。
+        さらに、候補が見つかった場合はstateを'guess'に変更します。
+
+        Args:
+            text (str): 商品名の一部。
+
+        Returns:
+            str or None: 候補が見つかれば、その一覧。なければNone。
+        """
+        base_sql = "select name from products where name ~* '{}'"
+        for word in generate_words(text):
+            sql = base_sql.format(word)
+            print(f"sql: {sql}")  # Debug
+            self.cursor.execute(sql)
+            rows = self.cursor.fetchall()
+            print(f"rows: {rows}")  # Debug
+            if rows:
+                res = f'目当ての商品があれば対応する番号を入力してください。\n無ければそれ以外の文字を送信してください。\n'
+                for n, name in enumerate(set(str(x[0]) for x in rows)):
+                    self.guess[n] = name
+                    res += f'{n}: {name}\n'
+                self.state = 'guess'
+                return res
 
     def response(self, text):
-        """文字列を受け取り、商品情報を単価の安い順でソートして返します。
+        """文字列を受け取り、商品情報を単価の安い順, 数量の少ない順でソートして返します。
         AddResponderを保持している場合はAddResponderとして振舞います。
 
         Args:
@@ -392,15 +420,19 @@ class ProductResponder(Responder):
                 self.adder = None
                 self.end()
             return res
-        if text in ('-s', '--show'):
+        if self.state == 'guess':
+            res = self.truth_product(text)
+            self.end()
+        elif text in ('-s', '--show'):
             res = self.show_products()
             self.end()
         else:
             res = self.retrieve(text)
-            self.end()
+            if self.state != 'guess':
+                self.end()
         if not res:
             res = f"{text}が見つかりませんでした。\n登録されていないか、誤字脱字の可能性があります。"
-        return res
+        return res.strip()
 
     def retrieve(self, text):
         """データベースから商品情報を受け取り、整形して返します。
@@ -414,6 +446,8 @@ class ProductResponder(Responder):
         sql = f"select * from products where name='{text}' order by price/amount,amount limit 5"
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
+        if not rows:
+            return self.guess_product(text)
         return self.format_products(rows)
 
     def show_products(self):
@@ -426,6 +460,20 @@ class ProductResponder(Responder):
         self.cursor.execute(sql)
         return "\n".join(set(str(x[0]) for x in self.cursor.fetchall()))
 
+    def truth_product(self, text):
+        """数値変換可能な文字列を受け取り、その値がguessに存在した場合、retrieve(guess[int(text)])を返します。
+
+        Args:
+            text (str): 数値変換可能な文字列。
+
+        Returns:
+            str: 商品情報の文字列。または、終了を伝えるメッセージ。
+        """
+        num = Responder.text_to_value(text, int)
+        if num in self.guess:
+            return self.retrieve(self.guess[num])
+        return "問い合わせを終了しました。"
+
     @property
     def adder(self):
         """商品情報を登録するレスポンダです。
@@ -434,3 +482,12 @@ class ProductResponder(Responder):
             AddResponder or None: 商品情報を登録するレスポンダです。必要ないときはNoneです。
         """
         return self.__adder
+
+    @property
+    def guess(self):
+        """商品情報が見つからなかった時の予測候補です。
+
+        Returns:
+            dict: 商品情報の予測候補。
+        """
+        return self.__guess
