@@ -186,3 +186,7 @@ class Talker:
             dict: ユーザーを登録しておく辞書。
         """
         return self.__users
+
+
+if __name__ == '__main__':
+    print("This module is not script file.")

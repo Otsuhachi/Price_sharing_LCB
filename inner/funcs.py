@@ -71,4 +71,4 @@ def text_to_value(text, mode='both'):
 
 
 if __name__ == '__main__':
-    print(list(generate_words("Examples")))
+    print("This module is not script file.")

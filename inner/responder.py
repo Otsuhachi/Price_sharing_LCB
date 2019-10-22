@@ -468,3 +468,7 @@ class ProductResponder(Responder):
             dict: 商品情報の予測候補。
         """
         return self.__guess
+
+
+if __name__ == '__main__':
+    print("This module is not script file.")
