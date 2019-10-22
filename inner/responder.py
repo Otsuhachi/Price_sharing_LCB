@@ -1,5 +1,9 @@
-from inner.loader import Loader
+import re
+
 import psycopg2
+
+from inner.funcs import generate_words, text_to_value
+from inner.loader import Loader
 
 
 class Responder:
@@ -87,64 +91,6 @@ class Responder:
             raise ValueError
         self.__state = value
 
-    @staticmethod
-    def text_to_value(text, mode='both'):
-        """文字列を数値変換し、返します。
-
-        modeで変換結果が変わります。
-        modeに指定できる引数は[float, int, 'both']のいずれかで、それ以外を与えた場合は'both'になります。
-
-        Examples:
-            Case1:
-                >>> from talker.responder import Responder as R
-                >>> a='2'
-                >>> R.text_to_value(a)
-                2
-                >>> R.text_to_value(a, int)
-                2
-                >>> R.text_to_value(a, float)
-                2.0
-                >>> str(R.text_to_value('a'))
-                'None'
-
-            Case2:
-                >>> from talker.responder import Responder as R
-                >>> a='2.3'
-                >>> R.text_to_value(a)
-                2.3
-                >>> R.text_to_value(a, int)
-                2
-                >>> R.text_to_value(a, float)
-                2.3
-
-        Args:
-            text (str): 数値に変換したい文字列。
-            mode (str or int or float, optional): 変換モード。詳しくはExamplesを参照してください。
-
-        Returns:
-            int or float or None: 数値型。変換できなければNoneが返ります。
-        """
-        if mode not in (int, float, 'both'):
-            mode = 'both'
-        try:
-            f = float(text)
-            if mode == float:
-                return f
-        except ValueError:
-            return None
-        try:
-            i = int(f)
-        except ValueError:
-            if mode == 'both':
-                return f
-            return None
-        if mode == 'both':
-            if f == i:
-                return i
-            return f
-        elif mode == int:
-            return i
-
 
 class AddResponder(Responder):
     """商品情報を追加するためのレスポンダです。
@@ -191,18 +137,61 @@ class AddResponder(Responder):
         self.update_state()
         if previous == 0:
             return self.responses[self.state]
+        if self.state == 'has_refill':
+            num = text_to_value(text, int)
+            if num == 0:
+                self.info['name'] += "詰替"
+            elif num == 1:
+                self.info['name'] += "本体"
+            else:
+                return self.responses[self.state].format(self.info['name'])
+            return self.commit()
         self.store_infomation_value(text)
         if self.info['confirm'] in ('ok', 'no'):
-            if self.info['confirm'] == 'ok':
-                self.send_database()
-                res = "登録しました。"
-            else:
-                res = "登録を取り消しました。"
-            self.end()
-            return res
+            return self.commit()
         if self.state == 'confirm':
             return self.responses[self.state].format(*self.values)
         return self.responses[self.state]
+
+    def commit(self):
+        """登録作業の完了を試みます。
+        無事登録できた場合、あるいは登録しなかった場合にはこのレスポンダは終了状態になります。
+        データベースに登録する作業に問題があった場合は処理が継続します。
+
+        Returns:
+            str: 結果を表示する文字列。
+        """
+        if self.info['confirm'] == 'ok':
+            if self.send_database():
+                res = "登録しました。"
+            else:
+                self.state = 'has_refill'
+                return self.responses[self.state].format(self.info['name'])
+        else:
+            res = "登録を取り消しました。"
+        self.end()
+        return res
+
+    def format_product_name(self):
+        """商品名末尾に詰め替えを表す語句がある場合適切な形式に置換します。
+        """
+        self.info['name'] = re.sub('詰め?替え?', '詰替', self.info['name'])
+
+    def need_distinction(self):
+        """商品を登録する際、"本体"あるいは"詰替"という区別の追加が必要かどうかを返します。
+        すでに商品名末尾が"本体"あるいは"詰替"である場合はFalseとして扱います。
+
+        Returns:
+            bool: 区別の追加が必要かどうか。
+        """
+        name = self.info['name']
+        if len(name) < 2:
+            return False
+        if name[-2:] in ('本体', '詰替'):
+            return False
+        sql = f"select name from products where name ~ '{name}詰め?替え?$' or name ~ '{name}本体$'"
+        self.cursor.execute(sql)
+        return bool(self.cursor.fetchall())
 
     def response(self, text):
         """応答を生成し、返します。
@@ -221,16 +210,19 @@ class AddResponder(Responder):
         """完成した商品情報をデータベースに登録します。
         商品名、分量、店、支店名が同じ商品が存在する場合、今回の商品情報で更新されます。
         """
+        self.format_product_name()
+        if self.need_distinction():
+            return False
         del_data = (self.info['name'], self.info['amount'], self.info['shop'],
                     self.info['shop_branch'])
-        data = tuple(self.info[key] for key in self.keys if key != 'confirm')
-
+        data = self.values
         sqls = [
             "delete from products where name='{}' and amount={} and shop='{}' and shop_branch='{}'"
             .format(*del_data), f"insert into products values {data}"
         ]
         for sql in sqls:
             self.cursor.execute(sql)
+        return True
 
     def store_infomation_value(self, text):
         """文字列を受け取り、現在のstateに応じて商品情報を登録していきます。
@@ -244,11 +236,11 @@ class AddResponder(Responder):
             if text:
                 self.info['name'] = text
         elif state == 'amount':
-            value = self.text_to_value(text)
+            value = text_to_value(text)
             if value is not None:
                 self.info['amount'] = value
         elif state == 'price':
-            value = self.text_to_value(text, int)
+            value = text_to_value(text, int)
             if value is not None:
                 self.info['price'] = value
         elif state == 'shop':
@@ -275,6 +267,8 @@ class AddResponder(Responder):
     def update_state(self):
         """現在の商品情報の完成度に応じてstateを更新します。
         """
+        if self.state == 'has_refill':
+            return
         if self.state == 0:
             self.state = 'name'
             return
@@ -341,6 +335,7 @@ class ProductResponder(Responder):
         """
         super().__init__()
         self.__adder: AddResponder = None
+        self.__guess = {}
 
     def format_products(self, rows):
         """商品情報群を受け取り、文字列として整形して返します。
@@ -352,31 +347,41 @@ class ProductResponder(Responder):
             str: 商品情報。
         """
         text = ""
-        products = []
-        amount_length = 0
-        price_length = 0
         for row in rows:
-            name, amount, price, shop, branch = map(str, row)
-            amount = str(self.text_to_value(amount))
-            price = str(self.text_to_value(price))
-            products.append((amount, price, shop, branch))
+            name, amount, price, shop, branch = row
             if not text:
-                text = f'{name}\n'
-            amount_length = max((amount_length, len(amount)))
-            price_length = max((price_length, len(price)))
-        for product in products:
-            amount, price, shop, branch = product
-            values = (
-                amount.center(amount_length, '　'),
-                price.center(price_length, '　'),
-                shop,
-                branch,
-            )
-            text += '{}, {}: {} {}\n'.format(*values)
-        return text.strip()
+                text = f"{name}\n"
+            amount = text_to_value(amount)
+            price = text_to_value(price)
+            text += f'{shop}({branch}): [{amount}] {price}円\n'
+        return text
+
+    def guess_product(self, text):
+        """文字列を受け取り、その文字列がなるべく長く一致する商品を探し、一覧を返します。
+        また、見つかった候補をguess[番号]=名前として登録していきます。
+        さらに、候補が見つかった場合はstateを'guess'に変更します。
+
+        Args:
+            text (str): 商品名の一部。
+
+        Returns:
+            str or None: 候補が見つかれば、その一覧。なければNone。
+        """
+        base_sql = "select name from products where name ~* '{}'"
+        for word in generate_words(text):
+            sql = base_sql.format(word)
+            self.cursor.execute(sql)
+            rows = self.cursor.fetchall()
+            if rows:
+                res = f'目当ての商品があれば対応する番号を入力してください。\n無ければそれ以外の文字を送信してください。\n'
+                for n, name in enumerate(set(str(x[0]) for x in rows)):
+                    self.guess[n] = name
+                    res += f'{n}: {name}\n'
+                self.state = 'guess'
+                return res
 
     def response(self, text):
-        """文字列を受け取り、商品情報を単価の安い順でソートして返します。
+        """文字列を受け取り、商品情報を単価の安い順, 数量の少ない順でソートして返します。
         AddResponderを保持している場合はAddResponderとして振舞います。
 
         Args:
@@ -392,11 +397,19 @@ class ProductResponder(Responder):
                 self.adder = None
                 self.end()
             return res
-        res = self.retrieve(text)
-        self.end()
+        if self.state == 'guess':
+            res = self.truth_product(text)
+            self.end()
+        elif text in ('-s', '--show'):
+            res = self.show_products()
+            self.end()
+        else:
+            res = self.retrieve(text)
+            if self.state != 'guess':
+                self.end()
         if not res:
             res = f"{text}が見つかりませんでした。\n登録されていないか、誤字脱字の可能性があります。"
-        return res
+        return res.strip()
 
     def retrieve(self, text):
         """データベースから商品情報を受け取り、整形して返します。
@@ -407,10 +420,36 @@ class ProductResponder(Responder):
         Returns:
             str: 商品情報。
         """
-        sql = f"select * from products where name='{text}' order by price/amount limit 5"
+        sql = f"select * from products where name='{text}' order by price/amount,amount limit 5"
         self.cursor.execute(sql)
         rows = self.cursor.fetchall()
+        if not rows:
+            return self.guess_product(text)
         return self.format_products(rows)
+
+    def show_products(self):
+        """データベースに登録されている商品名の一覧を返します。
+
+        Returns:
+            str: 商品名一覧。
+        """
+        sql = "select name from products order by name"
+        self.cursor.execute(sql)
+        return "\n".join(set(str(x[0]) for x in self.cursor.fetchall()))
+
+    def truth_product(self, text):
+        """数値変換可能な文字列を受け取り、その値がguessに存在した場合、retrieve(guess[int(text)])を返します。
+
+        Args:
+            text (str): 数値変換可能な文字列。
+
+        Returns:
+            str: 商品情報の文字列。または、終了を伝えるメッセージ。
+        """
+        num = text_to_value(text, int)
+        if num in self.guess:
+            return self.retrieve(self.guess[num])
+        return "問い合わせを終了しました。"
 
     @property
     def adder(self):
@@ -420,3 +459,12 @@ class ProductResponder(Responder):
             AddResponder or None: 商品情報を登録するレスポンダです。必要ないときはNoneです。
         """
         return self.__adder
+
+    @property
+    def guess(self):
+        """商品情報が見つからなかった時の予測候補です。
+
+        Returns:
+            dict: 商品情報の予測候補。
+        """
+        return self.__guess

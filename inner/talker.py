@@ -68,8 +68,12 @@ class Talker:
         """
         self.entry_user(user_id, text)
         user = self.users[user_id]
+        if user['status'] == 'cancel':
+            res = "取り消しました" if user['responder'] is not None else None
+            self.delete_user(user_id)
+            return res
         responder = user['responder']
-        res = responder.response(text)
+        res = responder.response(text.strip())
         if responder.state == 'end':
             self.delete_user(user_id)
         return res
@@ -124,6 +128,10 @@ class Talker:
             responder = AddResponder()
         elif status == 'products':
             responder = ProductResponder()
+        elif status == 'show':
+            responder = ProductResponder()
+        else:
+            responder = None
         user['responder'] = responder
 
     def set_status(self, user_id, text):
