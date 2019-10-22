@@ -1,6 +1,6 @@
 from inner.loader import Loader
 import psycopg2
-from inner.funcs import generate_words
+from inner.funcs import generate_words, text_to_value
 
 
 class Responder:
@@ -87,64 +87,6 @@ class Responder:
         if value in (0, 'end'):
             raise ValueError
         self.__state = value
-
-    @staticmethod
-    def text_to_value(text, mode='both'):
-        """文字列を数値変換し、返します。
-
-        modeで変換結果が変わります。
-        modeに指定できる引数は[float, int, 'both']のいずれかで、それ以外を与えた場合は'both'になります。
-
-        Examples:
-            Case1:
-                >>> from talker.responder import Responder as R
-                >>> a='2'
-                >>> R.text_to_value(a)
-                2
-                >>> R.text_to_value(a, int)
-                2
-                >>> R.text_to_value(a, float)
-                2.0
-                >>> str(R.text_to_value('a'))
-                'None'
-
-            Case2:
-                >>> from talker.responder import Responder as R
-                >>> a='2.3'
-                >>> R.text_to_value(a)
-                2.3
-                >>> R.text_to_value(a, int)
-                2
-                >>> R.text_to_value(a, float)
-                2.3
-
-        Args:
-            text (str): 数値に変換したい文字列。
-            mode (str or int or float, optional): 変換モード。詳しくはExamplesを参照してください。
-
-        Returns:
-            int or float or None: 数値型。変換できなければNoneが返ります。
-        """
-        if mode not in (int, float, 'both'):
-            mode = 'both'
-        try:
-            f = float(text)
-            if mode == float:
-                return f
-        except ValueError:
-            return None
-        try:
-            i = int(f)
-        except ValueError:
-            if mode == 'both':
-                return f
-            return None
-        if mode == 'both':
-            if f == i:
-                return i
-            return f
-        elif mode == int:
-            return i
 
 
 class AddResponder(Responder):
@@ -245,11 +187,11 @@ class AddResponder(Responder):
             if text:
                 self.info['name'] = text
         elif state == 'amount':
-            value = self.text_to_value(text)
+            value = text_to_value(text)
             if value is not None:
                 self.info['amount'] = value
         elif state == 'price':
-            value = self.text_to_value(text, int)
+            value = text_to_value(text, int)
             if value is not None:
                 self.info['price'] = value
         elif state == 'shop':
@@ -354,27 +296,13 @@ class ProductResponder(Responder):
             str: 商品情報。
         """
         text = ""
-        products = []
-        amount_length = 0
-        price_length = 0
         for row in rows:
-            name, amount, price, shop, branch = map(str, row)
-            amount = str(self.text_to_value(amount))
-            price = str(self.text_to_value(price))
-            products.append((amount, price, shop, branch))
+            name, amount, price, shop, branch = row
             if not text:
-                text = f'{name}\n'
-            amount_length = max((amount_length, len(amount)))
-            price_length = max((price_length, len(price)))
-        for product in products:
-            amount, price, shop, branch = product
-            values = (
-                amount.center(amount_length, '　'),
-                price.center(price_length, '　'),
-                shop,
-                branch,
-            )
-            text += '{}, {}: {} {}\n'.format(*values)
+                text = f"{name}\n"
+            amount = text_to_value(amount)
+            price = text_to_value(price)
+            text += f'{shop}({branch}): [{amount}] {price}円\n'
         return text
 
     def guess_product(self, text):
@@ -469,7 +397,7 @@ class ProductResponder(Responder):
         Returns:
             str: 商品情報の文字列。または、終了を伝えるメッセージ。
         """
-        num = Responder.text_to_value(text, int)
+        num = text_to_value(text, int)
         if num in self.guess:
             return self.retrieve(self.guess[num])
         return "問い合わせを終了しました。"
