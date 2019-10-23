@@ -4,90 +4,72 @@ from pathlib import Path
 
 
 class Loader:
-    """AIの応答パターンを管理するファイルにアクセスするためのクラスです。
+    """外部ファイルから必要なデータを読み込むためのクラスです。
 
+    このクラスはインスタンスを必要としません。
 
-    Attributes:
-        actions (list[dict]): AIの行動の定義群です。
-        add_responses (list[dict]): AddResponder用の定義群です。
-        todo (list[dict]): 実装予定の定義群です。
-        uri (str): Postgresqlに接続する情報です。
+    Returns:
+        str: load_uri。
+        list[dict]: load_action, load_add_responses。
     """
-    def __init__(self):
-        """定義ファイルを読み込みます。
+    PATH = Path('inner', 'dics')
+    PATTERN = PATH / 'pattern.txt'
+    URI = PATH / 'uri.txt'
 
-        読み込んだ定義ファイルを取得する場合は目的の種類のプロパティにアクセスしてください。
+    @classmethod
+    def __load(cls, mode, is_unique=False):
+        """パターン定義ファイルから指定モードのデータを読み込みます。
+        is_uniqueを指定すると、[{pattern: status}, {...}, ...]となります。
+        標準では[{'pattern': pattern, 'status': status}, {...}, ...]となります。
 
-        Examples:
-            >>> from loader import Loader
-            >>> loader = Loader()
-            >>> loader.actions
-            [{'pattern': '^(登録|追加|とうろく|ついか|add)', 'status': 'add'}]
+        Args:
+            mode (str): 読み込むパターン名。
+            is_unique (bool, optional): リストに格納される辞書の形式が固有の物になります。
+
+        Returns:
+            list[dict]: パターン定義データ。
         """
-        self.__path = Path('inner', 'dics')
-        self.__pattern_file = self.__path / 'pattern.txt'
-        self.__db_file = self.__path / 'db.txt'
-        self.__actions = []
-        self.__add_responses = []
-        self.__todo = []
-        self.__load()
-
-    def __load(self):
-        """このメソッドは自動実行専用です。
-        """
-        with open(self.__pattern_file, 'r', encoding='utf-8') as f:
+        data = []
+        with open(cls.PATTERN, 'r', encoding='utf-8') as f:
             for line in f:
                 if not line:
                     continue
                 type_, pattern, status = (x.strip() for x in line.split('\t'))
-                if type_ == 'action':
-                    self.__actions.append({
-                        'pattern': pattern,
-                        'status': status
-                    })
-                elif type_ == 'todo':
-                    self.__todo.append({'pattern': pattern, 'status': status})
-                elif type_ == 'add_responses':
+                if type_ == mode:
                     status = str(status).replace('\\n', '\n')
-                    self.__add_responses.append({pattern: status})
-        with open(self.__db_file, 'r', encoding='utf-8') as f:
-            self.__uri = pickle.loads(base64.b64decode(f.read()))
+                    if is_unique:
+                        data.append({pattern: status})
+                    else:
+                        data.append({'pattern': pattern, 'status': status})
+        return data
 
-    @property
-    def actions(self):
-        """AIの行動を定義する辞書オブジェクトが纏められたリストです。
+    @classmethod
+    def load_action(cls):
+        """AIの行動を定義する辞書オブジェクトが纏められたリストを読み込みます。
 
         Returns:
             list[dict]: AIの行動を定義する辞書オブジェクトが纏められたリスト。
         """
-        return self.__actions
+        return cls.__load('action')
 
-    @property
-    def add_responses(self):
-        """AddResponder用の定義群です。
+    @classmethod
+    def load_add_responses(cls):
+        """AddResponder用の定義群を読み込みます。
 
         Returns:
             list[dict]: AddResponder用の定義群。
         """
-        return self.__add_responses
+        return cls.__load('add_responses', True)
 
-    @property
-    def todo(self):
-        """AIの応答パターンに追加するかもしれない反応の定義群です。
-
-        Returns:
-            list[dict]: AIの応答パターンに追加するかもしれない反応の定義群。
-        """
-        return self.__todo
-
-    @property
-    def uri(self):
-        """データベースに接続するための情報です。
+    @classmethod
+    def load_uri(cls):
+        """データベースに接続するための情報を読み込みます。
 
         Returns:
             str: データベースに接続するための情報。
         """
-        return self.__uri
+        with open(cls.URI, 'r', encoding='utf-8') as f:
+            return pickle.loads(base64.b64decode(f.read()))
 
 
 if __name__ == '__main__':

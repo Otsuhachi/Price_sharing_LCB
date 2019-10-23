@@ -21,7 +21,7 @@ class Responder:
         Args:
             commit (bool, optional): sqlを発行した際、データベースに結果を反映するかどうか。 標準では反映させません。
         """
-        self.__connection = psycopg2.connect(Loader().uri)
+        self.__connection = psycopg2.connect(Loader.load_uri())
         self.__connection.autocommit = commit
         self.__cursor = self.__connection.cursor()
 
@@ -115,7 +115,7 @@ class AddResponder(Responder):
         """反応する文字列パターンを読み込みます。
         また、設定に必要なキー群を読み込み設定します。
         """
-        patterns = Loader().add_responses
+        patterns = Loader.load_add_responses()
         self.__keys = []
         self.__responses = {}
         for pattern in patterns:

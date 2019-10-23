@@ -24,7 +24,7 @@ class Talker:
         ユーザーの辞書を用意します。
         定期的にタイムアウトしたユーザーを辞書から削除します。
         """
-        self.__actions = Loader().actions
+        self.__actions = Loader.load_action()
         self.__users = {}
         self.__th = threading.Thread(
             target=lambda: self.schedule(30, self.check_timeout, False))
