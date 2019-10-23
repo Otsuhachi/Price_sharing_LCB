@@ -72,6 +72,9 @@ class Talker:
             res = "取り消しました" if user['responder'] is not None else None
             self.delete_user(user_id)
             return res
+        if user['status'] == 'help':
+            self.delete_user(user_id)
+            return self.show_help()
         responder = user['responder']
         res = responder.response(text.strip())
         if responder.state == 'end':
@@ -95,6 +98,23 @@ class Talker:
         self.set_status(user_id, text)
         self.set_responder(user_id)
         self.set_timeout(user_id)
+
+    def show_help(self):
+        """このチャットボットで使用可能な機能の使い方を表示します。
+
+        Returns:
+            str: ヘルプ文字列。
+        """
+        helps = [
+            '\n　'.join(('[ 商品を登録する] ', '追加', 'ついか', '登録', 'とうろく', 'add')),
+            '\n　'.join(('[ 登録されている商品名一覧を表示] ', '--show', '-s')),
+            '\n　'.join(('[ 商品情報を確認 ]', '商品名')),
+            '\n　'.join(
+                ('[ 進行中の処理を中断 ]', '取り消し', '取消', 'とりけし', 'キャンセル', 'cancel')),
+            '\n　'.join(('[ ヘルプを表示 ]', '--help', '-h')),
+            "※英字は大文字小文字を問いません。",
+        ]
+        return "\n\n".join(helps)
 
     def schedule(self, interval, f, wait=True):
         """指定した関数を定期的に実行するスレッドを生成します。
@@ -142,6 +162,7 @@ class Talker:
             text (str): 文字列。
         """
         user = self.users[user_id]
+        text = text.lower()
         for ptn in self.actions:
             matcher = re.search(ptn['pattern'], text)
             if matcher:

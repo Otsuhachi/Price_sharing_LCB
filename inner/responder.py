@@ -358,6 +358,8 @@ class ProductResponder(Responder):
 
     def guess_product(self, text):
         """文字列を受け取り、その文字列がなるべく長く一致する商品を探し、一覧を返します。
+        候補が1件しか見つからなかった場合にはその商品の情報を表示します。
+
         また、見つかった候補をguess[番号]=名前として登録していきます。
         さらに、候補が見つかった場合はstateを'guess'に変更します。
 
@@ -365,7 +367,7 @@ class ProductResponder(Responder):
             text (str): 商品名の一部。
 
         Returns:
-            str or None: 候補が見つかれば、その一覧。なければNone。
+            str or None: 候補が見つかれば、その一覧または情報。なければNone。
         """
         base_sql = "select name from products where name ~* '{}'"
         for word in generate_words(text):
@@ -377,6 +379,9 @@ class ProductResponder(Responder):
                 for n, name in enumerate(set(str(x[0]) for x in rows)):
                     self.guess[n] = name
                     res += f'{n}: {name}\n'
+                if len(self.guess) == 1:
+                    name = self.guess[0]
+                    return f"{name}の結果を表示しています。\n{self.retrieve(name)}"
                 self.state = 'guess'
                 return res
 
@@ -400,7 +405,7 @@ class ProductResponder(Responder):
         if self.state == 'guess':
             res = self.truth_product(text)
             self.end()
-        elif text in ('-s', '--show'):
+        elif text.lower() in ('-s', '--show'):
             res = self.show_products()
             self.end()
         else:
