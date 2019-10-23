@@ -433,9 +433,11 @@ class ProductResponder(Responder):
         Returns:
             str: 商品名一覧。
         """
-        sql = "select name from products order by name"
+        sql = "select name from products order by cast(name as char)"
         self.cursor.execute(sql)
-        return "\n".join(set(str(x[0]) for x in self.cursor.fetchall()))
+        tmp = [str(x[0]) for x in self.cursor.fetchall()]
+        products = sorted(set(tmp), key=tmp.index)
+        return "\n".join(products)
 
     def truth_product(self, text):
         """数値変換可能な文字列を受け取り、その値がguessに存在した場合、retrieve(guess[int(text)])を返します。
