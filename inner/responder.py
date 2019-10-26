@@ -103,13 +103,24 @@ class AddResponder(Responder):
     """
     def __init__(self, **kwargs):
         """商品情報を追加します。
+        キーワード引数でname, amount, price, shop, shop_branchを適切に設定することで商品登録を簡略化することができます。
         """
         super().__init__()
         self.__load()
         self.__infomation = {x: False for x in self.keys}
-        for key in kwargs:
-            if key in self.keys:
-                self.__infomation[key] = kwargs[key]
+        if kwargs:
+            catch_keys = ('name', 'amount', 'price', 'shop', 'shop_branch')
+            for key in kwargs:
+                if key not in catch_keys:
+                    del kwargs[key]
+            print("TO WHILE")
+            while kwargs:
+                self.update_state()
+                state = self.state
+                data = kwargs[state]
+                self.store_infomation_value(data)
+                del kwargs[state]
+                print(f"kwargs: {kwargs}")
 
     def __load(self):
         """反応する文字列パターンを読み込みます。

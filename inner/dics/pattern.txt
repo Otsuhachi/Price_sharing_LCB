@@ -2,6 +2,7 @@ action	^(登録|追加|とうろく|ついか|add)	add
 action	^(キャンセル|cancel|取り?消し?|とりけし)	cancel
 action	^(--show|-s)	show
 action	^(--help|-h)	help
+action	.+\n.+\n.+\n.+\n.+	superadd
 add_responses	name	商品名を入力してください。
 add_responses	amount	分量(数値)を入力してください。\n単位は入力しないでください。\n分からない場合は1を入力してください。
 add_responses	price	価格(整数値)を入力してください。\n単位は入力しないでください。

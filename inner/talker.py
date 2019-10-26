@@ -66,6 +66,7 @@ class Talker:
         Returns:
             str: Responderからの応答。
         """
+        text = text.strip()
         self.entry_user(user_id, text)
         user = self.users[user_id]
         if user['status'] == 'cancel':
@@ -76,7 +77,7 @@ class Talker:
             self.delete_user(user_id)
             return self.show_help()
         responder = user['responder']
-        res = responder.response(text.strip())
+        res = responder.response(text)
         if responder.state == 'end':
             self.delete_user(user_id)
         return res
@@ -96,7 +97,7 @@ class Talker:
             'timeout': None
         })
         self.set_status(user_id, text)
-        self.set_responder(user_id)
+        self.set_responder(user_id, text)
         self.set_timeout(user_id)
 
     def show_help(self):
@@ -135,17 +136,30 @@ class Talker:
             next_time = ((base_time - time.time()) % interval) or interval
             time.sleep(next_time)
 
-    def set_responder(self, user_id):
+    def set_responder(self, user_id, text: str):
         """ユーザーのstatusに応じてResponderを生成し、保持します。
+        superaddステータスの場合は特殊な処理を行います。
 
         Args:
             user_id (str): ユーザID。
+            text (str): 文字列。
         """
         user = self.users[user_id]
         if user['responder'] is not None:
             return
         status = user['status']
-        if status == 'add':
+        if status == 'superadd':
+            tmp = map(lambda x: x.strip(), text.split('\n'))
+            try:
+                name, amount, price, shop, branch = [x for x in tmp if x]
+                responder = AddResponder(name=name,
+                                         amount=amount,
+                                         price=price,
+                                         shop=shop,
+                                         shop_branch=branch)
+            except Exception:
+                responder = AddResponder()
+        elif status == 'add':
             responder = AddResponder()
         elif status == 'products':
             responder = ProductResponder()
