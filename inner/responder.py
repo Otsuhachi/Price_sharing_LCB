@@ -405,9 +405,11 @@ class ProductResponder(Responder):
         if self.state == 'guess':
             res = self.truth_product(text)
             self.end()
-        elif text.lower() in ('-s', '--show'):
+        elif text in ('-s', '--show'):
             res = self.show_products()
             self.end()
+        elif text in ('-S', '--SHOW'):
+            res = self.show_products(True)
         else:
             res = self.retrieve(text)
             if self.state != 'guess':
@@ -432,17 +434,30 @@ class ProductResponder(Responder):
             return self.guess_product(text)
         return self.format_products(rows)
 
-    def show_products(self):
+    def show_products(self, ask=False):
         """データベースに登録されている商品名の一覧を返します。
+        askを真にすると、商品一覧に番号が与えられ、guessステートになり、次に受け取る文字列がtruth_productされます。
+
+        Args:
+            ask (bool, optional): 一覧を表示した後、問い合わせモードに移行するか。
 
         Returns:
-            str: 商品名一覧。
+            str: 商品一覧。
         """
         sql = "select name from products order by cast(name as char)"
         self.cursor.execute(sql)
         tmp = [str(x[0]) for x in self.cursor.fetchall()]
         products = sorted(set(tmp), key=tmp.index)
-        return "\n".join(products)
+        if ask:
+            res = ""
+            for i, product in enumerate(products):
+                res += f"{i}: {product}\n"
+                self.guess[i] = product
+            res += "\n目当ての商品番号を入力してください。\nそれ以外の文字を入力すると商品参照モードを終了します。"
+            self.state = 'guess'
+            return res
+        else:
+            return "\n".join(products)
 
     def truth_product(self, text):
         """数値変換可能な文字列を受け取り、その値がguessに存在した場合、retrieve(guess[int(text)])を返します。
