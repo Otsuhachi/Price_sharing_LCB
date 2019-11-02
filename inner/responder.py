@@ -113,14 +113,12 @@ class AddResponder(Responder):
             for key in kwargs:
                 if key not in catch_keys:
                     del kwargs[key]
-            print("TO WHILE")
             while kwargs:
                 self.update_state()
                 state = self.state
                 data = kwargs[state]
                 self.store_infomation_value(data)
                 del kwargs[state]
-                print(f"kwargs: {kwargs}")
 
     def __load(self):
         """反応する文字列パターンを読み込みます。
@@ -183,6 +181,27 @@ class AddResponder(Responder):
         self.end()
         return res
 
+    def delete_database(self):
+        """データベースから商品名、分量、店、支店が一致する商品の削除を行います。
+        分量が小数点の場合、近似値を削除します。
+        """
+        name = self.info['name']
+        amount = self.info['amount']
+        shop = self.info['shop']
+        shop_branch = self.info['shop_branch']
+        sql = "delete from products where name='{}' and {} and shop='{}' and shop_branch='{}'"
+        if type(amount) is int:
+            del_data = (name, f'amount={amount}', shop, shop_branch)
+        elif type(amount) is float:
+            decimal_digit = len(str(amount).split('.')[1])
+            min_ = amount - float(f'0.{"0"*decimal_digit}1')
+            max_ = amount + float(f'0.{"0"*(decimal_digit-1)}1') - float(
+                f'0.{"0"*decimal_digit}1')
+            del_data = (name, f'amount between {min_} and {max_}', shop,
+                        shop_branch)
+        sql = sql.format(*del_data)
+        self.cursor.execute(sql)
+
     def format_product_name(self):
         """商品名末尾に詰め替えを表す語句がある場合適切な形式に置換します。
         """
@@ -224,15 +243,10 @@ class AddResponder(Responder):
         self.format_product_name()
         if self.need_distinction():
             return False
-        del_data = (self.info['name'], self.info['amount'], self.info['shop'],
-                    self.info['shop_branch'])
+        self.delete_database()
         data = self.values
-        sqls = [
-            "delete from products where name='{}' and amount={} and shop='{}' and shop_branch='{}'"
-            .format(*del_data), f"insert into products values {data}"
-        ]
-        for sql in sqls:
-            self.cursor.execute(sql)
+        sql = f"insert into products values {data}"
+        self.cursor.execute(sql)
         return True
 
     def store_infomation_value(self, text):
