@@ -469,7 +469,7 @@ class ProductResponder(Responder):
         Returns:
             str: 商品一覧。
         """
-        sql = "select name from products order by cast(name as char)"
+        sql = 'select name from products order by name collate "ja_JP.utf8", shop_branch collate "ja_JP.utf8"'
         self.cursor.execute(sql)
         tmp = [str(x[0]) for x in self.cursor.fetchall()]
         products = sorted(set(tmp), key=tmp.index)
