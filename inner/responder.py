@@ -203,9 +203,13 @@ class AddResponder(Responder):
         self.cursor.execute(sql)
 
     def format_product_name(self):
-        """商品名末尾に詰め替えを表す語句がある場合適切な形式に置換します。
+        """商品名末尾に詰め替え、本体を表す語句がある場合適切な形式に置換します。
         """
-        self.info['name'] = re.sub('詰め?替え?', '詰替', self.info['name'])
+        name = self.info['name']
+        name = re.sub('詰め?替え?', '詰替', name)
+        name = re.sub('つめかえ', '詰替', name)
+        name = re.sub('ほんたい', '本体', name)
+        self.info['name'] = name
 
     def need_distinction(self):
         """商品を登録する際、"本体"あるいは"詰替"という区別の追加が必要かどうかを返します。
@@ -218,6 +222,8 @@ class AddResponder(Responder):
         if len(name) < 2:
             return False
         if name[-2:] in ('本体', '詰替'):
+            return False
+        if name[-4:] in ('ほんたい', 'つめかえ'):
             return False
         sql = f"select name from products where name ~ '{name}詰め?替え?$' or name ~ '{name}本体$'"
         self.cursor.execute(sql)
